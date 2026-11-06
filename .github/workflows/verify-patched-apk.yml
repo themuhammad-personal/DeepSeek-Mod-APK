@@ -1,11 +1,18 @@
 name: Verify Morphe patch against official DeepSeek APK
 
 on:
-  push:
-    branches:
-      - "work/**"
-      - "dev"
   workflow_dispatch:
+    inputs:
+      official_apk_url:
+        description: "HTTPS URL of the exact inspected DeepSeek 2.7.4 APK"
+        required: true
+        type: string
+        default: "https://download.deepseek.com/apk/deepseek.apk"
+      official_apk_sha256:
+        description: "SHA-256 of that exact 2.7.4 APK (not the current/latest APK)"
+        required: true
+        type: string
+        default: "a868bad448c87444f6c825b5ddbfa23756ad34178ab08503d107ff8e29b4f022"
 
 permissions:
   contents: read
@@ -14,6 +21,9 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    env:
+      TARGET_APK_URL: ${{ inputs.official_apk_url }}
+      TARGET_APK_SHA256: ${{ inputs.official_apk_sha256 }}
     steps:
       - name: Check out source
         uses: actions/checkout@v4
@@ -43,6 +53,13 @@ jobs:
           test -x "$ANDROID_HOME/build-tools/36.0.0/aapt"
           test -x "$ANDROID_HOME/build-tools/36.0.0/apksigner"
 
+      - name: Validate input URL and checksum format
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$TARGET_APK_URL" == https://* ]] || { echo "APK URL must use HTTPS"; exit 2; }
+          [[ "$TARGET_APK_SHA256" =~ ^[a-fA-F0-9]{64}$ ]] || { echo "APK SHA-256 must be 64 hexadecimal characters"; exit 2; }
+
       - name: Run approval-first native core tests
         run: bash scripts/test-agent-core.sh
 
@@ -52,15 +69,24 @@ jobs:
           GITHUB_ACTOR: ${{ github.actor }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Download and verify official DeepSeek 2.7.4 sample
+      - name: Download and verify exact DeepSeek 2.7.4 sample
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/deepseek-verify"
-          curl --fail --location --retry 3 --max-time 300 \
-            https://download.deepseek.com/apk/deepseek.apk \
+          curl --proto '=https' --tlsv1.2 --fail --location --retry 3 --max-time 300 \
+            "$TARGET_APK_URL" \
             --output "$RUNNER_TEMP/deepseek-verify/deepseek.apk"
-          echo "a868bad448c87444f6c825b5ddbfa23756ad34178ab08503d107ff8e29b4f022 $RUNNER_TEMP/deepseek-verify/deepseek.apk" | sha256sum --check
+          ACTUAL_SHA="$(sha256sum "$RUNNER_TEMP/deepseek-verify/deepseek.apk" | awk '{print $1}')"
+          if [[ "$ACTUAL_SHA" != "${TARGET_APK_SHA256,,}" ]]; then
+            echo "::error::APK checksum mismatch. Expected $TARGET_APK_SHA256 but downloaded $ACTUAL_SHA."
+            "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$RUNNER_TEMP/deepseek-verify/deepseek.apk" | head -n 3 || true
+            echo "This workflow only supports the inspected package com.deepseek.chat 2.7.4 (versionCode 293)."
+            exit 1
+          fi
+          echo "$ACTUAL_SHA  $RUNNER_TEMP/deepseek-verify/deepseek.apk" | sha256sum --check
+          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$RUNNER_TEMP/deepseek-verify/deepseek.apk" > "$RUNNER_TEMP/deepseek-verify/source-badging.txt"
+          grep -F "package: name='com.deepseek.chat' versionCode='293' versionName='2.7.4'" "$RUNNER_TEMP/deepseek-verify/source-badging.txt"
 
       - name: Download pinned Morphe Desktop CLI
         shell: bash
@@ -105,8 +131,8 @@ jobs:
           APK="$RUNNER_TEMP/deepseek-verify/deepseek-patched.apk"
           AAPT="$ANDROID_HOME/build-tools/36.0.0/aapt"
           APKSIGNER="$ANDROID_HOME/build-tools/36.0.0/apksigner"
-          "$AAPT" dump badging "$APK" > "$RUNNER_TEMP/deepseek-verify/badging.txt"
-          grep -F "package: name='com.deepseek.chat' versionCode='293' versionName='2.7.4'" "$RUNNER_TEMP/deepseek-verify/badging.txt"
+          "$AAPT" dump badging "$APK" > "$RUNNER_TEMP/deepseek-verify/patched-badging.txt"
+          grep -F "package: name='com.deepseek.chat' versionCode='293' versionName='2.7.4'" "$RUNNER_TEMP/deepseek-verify/patched-badging.txt"
           "$APKSIGNER" verify --verbose "$APK"
           python3 - "$APK" <<'PY'
           import sys, zipfile

@@ -19,14 +19,21 @@ See [target APK evidence](docs/TARGET-APK.md) before supporting another release.
 
 ## Implemented in this phase
 
-- Morphe Patcher project and `.mpp` bundle CI.
+- Morphe Patcher project and successful `.mpp` bundle CI.
 - Structural fingerprints for the exact prompt-field serializer call and response content deserializer result.
 - Compatibility gate and optional launcher label change.
 - DEX extension with approval-first policy defaults, bounded tool-call model, strict proposal parser and workspace path guard.
 - A default-off experimental patch that wires the two verified method seams to native request/response hooks.
-- Device-free Java tests for the parser, queue, safety policy and path guard.
-- Device-free Java regression tests for strict JSON parsing, opt-in hooks, queue limits, execution policy and workspace path validation.
-- A second CI workflow that downloads the pinned official sample, uses Morphe `--validate` plus Android SDK verification, applies the actual `.mpp` with Morphe Desktop, then verifies package/version, signature and merged extension DEX. The APK is temporary and is not uploaded or committed.
+- Device-free Java regression tests for strict JSON parsing, opt-in hooks, bounded queue, execution policy and workspace path validation.
+- A manual APK verification workflow that takes an HTTPS APK URL and its SHA-256, checks the exact target package/version, applies the MPP with Morphe Desktop 2.1.1, then verifies the patched APK package/version/signature and merged DEX.
+
+The latest MPP build succeeded on branch `work/morphe-foundation`. Its workflow artifact is available from the branch's [Build Morphe patch bundle](https://github.com/themuhammad-personal/DeepSeek-Mod-APK/actions) run.
+
+## Current patch-application status
+
+The supplied APK analysis is for DeepSeek 2.7.4. The official download URL is a moving "latest APK" endpoint; the verification workflow recently downloaded a different binary whose SHA-256 no longer matched the inspected 2.7.4 sample. The workflow correctly stopped before applying old fingerprints to an unknown build.
+
+To run full static patch verification, dispatch [Verify Morphe patch against official DeepSeek APK](https://github.com/themuhammad-personal/DeepSeek-Mod-APK/actions/workflows/verify-patched-apk.yml) from branch `work/morphe-foundation` and provide a direct HTTPS URL plus SHA-256 for the exact 2.7.4 APK. The APK is downloaded to a temporary runner directory, checked for package/version and deleted at job end. Do not use the moving latest URL unless its SHA and package/version match the expected sample.
 
 ## Important current limitation
 
@@ -46,10 +53,6 @@ gradle --no-daemon buildAndroid
 ```
 
 The `.mpp` bundle is produced in `patches/build/libs/`. Select the compatibility patch first. The experimental native agent hook patch is **disabled by default** and should only be selected on the exact inspected target while testing.
-
-## Real patch verification
-
-GitHub Actions workflow `Verify Morphe patch against official DeepSeek APK` downloads the official 2.7.4 sample, checks its pinned SHA-256, applies the MPP using a pinned Morphe Desktop CLI, and verifies the resulting APK. Temporary APKs are deleted at the end of the job; they are not release assets.
 
 ## Security and identity
 
