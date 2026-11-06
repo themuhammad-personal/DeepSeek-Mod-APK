@@ -17,24 +17,24 @@ The user's Super-Deepseek- repository is the feature and UX reference, not sourc
 
 See docs/TARGET-APK.md before supporting another release.
 
-## Implemented in this phase
+## Implemented
 
 - Morphe Patcher project with successful MPP bundle CI.
-- Structural fingerprints for the inspected prompt serializer field and response content deserializer.
+- Version-scoped fingerprints for the exact prompt serializer and mutable streaming ResponseFragment SET/APPEND methods.
 - Compatibility gate and optional launcher label patch.
 - DEX extension with approval-first policy defaults, strict bounded tool proposal parser, and app-private workspace path guard.
-- Default-off experimental hooks that add tool-format guidance to the inspected prompt serializer and collect parsed proposal envelopes from deserialized assistant content.
-- A separate, default-off Native Agent Console Activity. When selected with the hook patch, it adds a second launcher entry for toggling session-only proposal mode, refreshing the proposal queue, copying arguments, dismissing proposals, or clearing the queue.
+- Default-off experimental hooks: add tool-format guidance to the prompt and observe the complete accumulated content after SSE ResponseFragment SET/APPEND mutations.
+- A separate, default-off Native Agent Console Activity to enable session-only proposal mode, refresh the proposal queue, copy arguments, dismiss proposals, or clear the queue.
 - Device-free Java regression tests for parsing, queue bounds, proposal snapshot/dismiss, execution policy, and path confinement.
 - A manual verification workflow that applies selected patches to an exact hash-pinned APK and checks package, version, signing validity, manifest Activity, and merged extension DEX.
 
-## Current Native Agent Console scope
+## Agent scope and limitations
 
-The console is deliberately a proposal-review surface, not a command executor. No shell process, MCP call, network request, file write or automatic tool approval is implemented. The Dismiss action only removes the selected proposal. Agent/proposal mode is off by default and is session-only; it resets when the app process restarts. The separate launcher entry is a temporary integration point until the native Compose chat navigation and response-rendering lifecycle are verified.
+The response observer now targets the native SSE JSON-delta mutation path: SseMessageRoot → mutable response model → SET/APPEND → ResponseFragment.content. In the inspected 2.7.4 Smali, APPEND passes the full accumulated content string after combining the previous content and incoming chunk. This is a better static hook than observing the separate static response-fragment deserializer.
 
-The response hook observes a deserialized content field. It is not a verified incremental SSE callback or Compose renderer hook, and it does not provide reliable message-to-tool-result handoff. This branch is a patch and native review-console foundation, not a complete ChatGPT/Claude-like agent.
+This is still static evidence, not a device-verified runtime callback. The hooks are disabled by default. The Console is a separate launcher Activity, not yet embedded in the main chat UI. No shell command, MCP request, network tool, file write, automatic approval, or tool-result handoff is implemented. The response callback frequency and Compose renderer lifecycle still require real-device verification. This is not yet a complete multi-turn AI agent.
 
-See docs/AGENT-RUNTIME-FOUNDATION.md, docs/NATIVE-AGENT-CONSOLE.md and docs/FEATURE-PORT-MAP.md.
+See docs/DEEPSEEK-STREAM-TRACE.md, docs/AGENT-RUNTIME-FOUNDATION.md, docs/NATIVE-AGENT-CONSOLE.md and docs/FEATURE-PORT-MAP.md.
 
 ## Build
 
@@ -51,11 +51,11 @@ The MPP bundle is produced in patches/build/libs/. For a test build select these
 
 The hook and console patches are disabled by default and only target the exact inspected APK version.
 
-## APK apply verification status
+## APK apply verification
 
-The sample APK analysis is for DeepSeek 2.7.4. The official download URL is a moving latest-version endpoint; a recent workflow downloaded a different binary and stopped at the SHA-256 check before applying any patch. This is intentional: never apply old R8 fingerprints to an uninspected version.
+The exact source APK must match the inspected 2.7.4 SHA-256. The current official download URL is a moving latest-version endpoint and has returned a different binary, so the verification workflow safely stops before applying old fingerprints. Supply a stable HTTPS URL and SHA-256 for the exact inspected APK; never change the hash to match an uninspected release.
 
-Dispatch the Verify Morphe patch against official DeepSeek APK workflow from branch work/morphe-foundation and provide a stable HTTPS URL plus SHA-256 for the exact inspected 2.7.4 sample. The workflow deletes temporary APKs at job completion and does not publish them.
+See the manual Verify Morphe patch against official DeepSeek APK workflow. It deletes temporary APKs after checking and does not publish them.
 
 ## Security and identity
 
@@ -69,10 +69,11 @@ Dispatch the Verify Morphe patch against official DeepSeek APK workflow from bra
 
 ## Project map
 
-- Architecture
-- Target APK evidence
-- Feature port map
-- Agent runtime foundation
-- Native Agent Console
-- Security boundaries
-- Build and verification
+- docs/ARCHITECTURE.md
+- docs/TARGET-APK.md
+- docs/DEEPSEEK-STREAM-TRACE.md
+- docs/FEATURE-PORT-MAP.md
+- docs/AGENT-RUNTIME-FOUNDATION.md
+- docs/NATIVE-AGENT-CONSOLE.md
+- docs/SECURITY-BOUNDARIES.md
+- docs/VERIFICATION.md

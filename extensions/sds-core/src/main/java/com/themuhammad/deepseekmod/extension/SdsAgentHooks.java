@@ -8,8 +8,9 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Narrow bridge for the two inspected DeepSeek 2.7.4 serialization seams.
- * Agent mode is off by default. Parsed calls remain proposals; no tool executes here.
+ * Narrow bridge for the inspected DeepSeek 2.7.4 prompt serializer and mutable
+ * SSE ResponseFragment content mutations. Agent mode is off by default.
+ * Parsed calls remain proposals; no tool executes here.
  */
 public final class SdsAgentHooks {
     private static final int MAX_PENDING_CALLS = 8;
@@ -32,10 +33,13 @@ public final class SdsAgentHooks {
         return (prompt == null ? "" : prompt) + TOOL_GUIDANCE;
     }
 
-    /** Called after the inspected assistant response-content field is deserialized. */
-    public static void observeResponse(String content) {
-        if (!enabled || content == null) return;
-        for (SdsToolCall call : SdsToolCallParser.parse(content)) {
+    /**
+     * Called after a ResponseFragment content SET or APPEND mutation.
+     * Both hooks pass the complete accumulated content, not just a delta.
+     */
+    public static void observeResponse(String completeContent) {
+        if (!enabled || completeContent == null) return;
+        for (SdsToolCall call : SdsToolCallParser.parse(completeContent)) {
             synchronized (PENDING) {
                 if (!enabled || !SEEN_IDS.add(call.getId())) continue;
                 while (PENDING.size() >= MAX_PENDING_CALLS) PENDING.removeFirst();

@@ -4,8 +4,8 @@ The Super DeepSeek repository is the product and UX reference. Its web implement
 
 | Reference capability | Web implementation concept | Native port target | Current state |
 |---|---|---|---|
-| AI Agent | sd-agent.js, prompt and tool loop | DEX request/response adapters + native AgentController | Experimental prompt and response hooks; proposal queue only; full loop not connected |
-| Tool review | tool cards and ask/approve UI | Android Activity proposal console | Implemented as a separate launcher Activity; review/dismiss only, no execution |
+| AI Agent | sd-agent.js, prompt and tool loop | DEX request hook + SSE ResponseFragment observer + AgentController | Prompt and streaming SET/APPEND hooks statically traced and implemented; proposal queue only; no executor or result handoff |
+| Tool review | tool cards and ask/approve UI | Android Activity proposal console | Implemented as a separate launcher Activity; review/copy/dismiss only, no execution |
 | Linux Studio | browser terminal and file workspace | Native Activity + app-private sandbox runtime | Planned; security and lifecycle work required |
 | MCP | sd-genui-mcp.js and browser fetch bridge | Native MCP client with transport, consent and credential store | Planned |
 | Generative UI | sd-genui modules, HTML/CSS renderer | Schema-validated Compose renderer and native artifact viewer | Planned |
@@ -19,6 +19,16 @@ The Super DeepSeek repository is the product and UX reference. Its web implement
 | Export / backup | browser export helpers | Android share sheet, SAF and backup/restore format | Planned |
 | Activity timeline | sd-run.js run cards and steps | Native agent event log and stoppable task UI | Planned |
 | Diagnostics | page-contract probes | Version-specific app contract checks and safe diagnostic export | Planned |
+
+## Streaming response trace
+
+The inspected 2.7.4 stream path has been statically traced:
+
+SseMessageRoot → mutable response model → JSON delta SET/APPEND → ResponseFragment.content.
+
+The experimental patch observes SET/APPEND after their state-holder writes, so the parser receives the replacement or full accumulated content string. This supersedes the earlier static ResponseFragment deserializer hook. Runtime callback frequency, coroutine/thread context, Compose rendering and device behaviour remain unverified.
+
+See docs/DEEPSEEK-STREAM-TRACE.md.
 
 ## Porting rules
 

@@ -3,15 +3,12 @@ package com.themuhammad.deepseekmod.patches
 import app.morphe.patcher.Fingerprint
 import app.morphe.patcher.InstructionLocation.MatchAfterImmediately
 import app.morphe.patcher.fieldAccess
-import app.morphe.patcher.literal
 import app.morphe.patcher.methodCall
 import app.morphe.patcher.opcode
+import app.morphe.patcher.string
 import com.android.tools.smali.dexlib2.Opcode
 
-/**
- * Version-scoped fingerprints based on the supplied apktool decode.
- * Each filter describes a real instruction/reference, not a textual name guess.
- */
+/** Prompt field on the inspected DeepSeek 2.7.4 request serializer. */
 internal object ChatPromptSerializerFingerprint : Fingerprint(
     definingClass = "Ljy1;",
     name = "e",
@@ -35,23 +32,42 @@ internal object ChatPromptSerializerFingerprint : Fingerprint(
 )
 
 /**
- * The response content is read with index 2. A conditional branch occurs between
- * the index literal and the invoke-interface, so that pair is deliberately not
- * constrained to adjacency. The move-result-object must immediately follow m().
+ * The SSE JSON-patch path resolves ResponseFragment.content to a mutable v44.
+ * SET decodes a replacement String then updates its state holder with dea.j().
  */
-internal object ChatResponseContentFingerprint : Fingerprint(
-    definingClass = "Lefa;",
-    name = "d",
-    returnType = "Ljava/lang/Object;",
-    parameters = listOf("Lrn3;"),
+internal object ChatResponseContentSetFingerprint : Fingerprint(
+    definingClass = "Lv44;",
+    name = "l",
+    returnType = "V",
+    parameters = listOf("Ljava/lang/String;", "Lc26;", "Lgv1;"),
     filters = listOf(
-        literal(2),
+        string("content"),
         methodCall(
-            definingClass = "Lx53;",
+            definingClass = "Ldea;",
+            name = "j",
+            parameters = listOf("Ljava/lang/Object;"),
+            returnType = "V"
+        )
+    )
+)
+
+/**
+ * SSE APPEND decodes the incoming chunk, joins it to the current content, then
+ * updates the holder with dea.m(). The second value argument is the full String.
+ */
+internal object ChatResponseContentAppendFingerprint : Fingerprint(
+    definingClass = "Lv44;",
+    name = "m",
+    returnType = "V",
+    parameters = listOf("Lc26;", "Ljava/lang/String;"),
+    filters = listOf(
+        string("content"),
+        methodCall(
+            definingClass = "Ldea;",
             name = "m",
-            parameters = listOf("Lsr9;", "I"),
-            returnType = "Ljava/lang/String;"
+            parameters = listOf("Ljava/lang/Object;", "Ljava/lang/Object;"),
+            returnType = "Z"
         ),
-        opcode(Opcode.MOVE_RESULT_OBJECT, location = MatchAfterImmediately())
+        opcode(Opcode.MOVE_RESULT, location = MatchAfterImmediately())
     )
 )
