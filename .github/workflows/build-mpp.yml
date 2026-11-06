@@ -1,0 +1,47 @@
+name: Build Morphe patch bundle
+
+on:
+  push:
+    branches:
+      - "work/**"
+      - "dev"
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "9.8.2"
+
+      - name: Build Morphe patches and DEX extension
+        run: gradle --no-daemon buildAndroid
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload MPP bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: deepseek-morphe-patches
+          path: patches/build/libs/*.mpp
+          if-no-files-found: error
+          retention-days: 14

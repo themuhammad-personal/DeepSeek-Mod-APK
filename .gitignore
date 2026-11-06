@@ -1,0 +1,27 @@
+# Gradle / IDE
+.gradle/
+**/build/
+.idea/
+*.iml
+local.properties
+
+# Generated Morphe bundles and Android binaries
+*.apk
+*.apks
+*.aab
+*.dex
+*.mpp
+*.mpe
+*.keystore
+*.jks
+*.p12
+*.pem
+*.key
+
+# Local reverse-engineering inputs
+official/
+decoded/
+apktool-work/
+jadx-work/
+analysis-work/
+*.zip

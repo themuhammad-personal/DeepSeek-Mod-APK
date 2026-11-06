@@ -1,0 +1,10 @@
+[versions]
+morphe-patcher = "2.3.0"
+# Keep in sync with the currently supported Morphe template toolchain.
+smali = "4220ae75f7"
+gson = "2.15.0"
+
+[libraries]
+gson = { module = "com.google.code.gson:gson", version.ref = "gson" }
+# The Morphe Gradle plugin supplies the patcher dependency; this entry is for update tracking.
+morphe-patcher = { module = "app.morphe:morphe-patcher", version.ref = "morphe-patcher" }
