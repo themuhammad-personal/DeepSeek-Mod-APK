@@ -1,5 +1,6 @@
 package com.themuhammad.deepseekmod.patches
 
+import app.morphe.patcher.patch.resourceXml
 import app.morphe.patcher.patch.patch
 
 /**
