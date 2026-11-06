@@ -7,7 +7,7 @@ import app.morphe.patcher.patch.patch
  * Changes only the launcher label; package identity and sign-in remain untouched.
  */
 @Suppress("unused")
-internal val superDeepSeekLauncherLabelPatch = patch(
+val superDeepSeekLauncherLabelPatch = patch(
     name = "Super DeepSeek launcher label",
     description = "Changes the launcher label from DeepSeek to Super DeepSeek.",
     default = false
