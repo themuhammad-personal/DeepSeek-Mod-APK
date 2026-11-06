@@ -48,17 +48,14 @@ public final class SdsAgentCoreSelfTest {
         SdsAgentHooks.observeResponse(payload);
         SdsAgentHooks.observeResponse(payload);
         check(SdsAgentHooks.pendingCount() == 1, "duplicate call id must be ignored");
-        SdsToolCall call = SdsAgentHooks.pollPendingToolCall();
-        check(call != null, "pending call missing");
+        java.util.List<SdsToolCall> snapshot = SdsAgentHooks.snapshotPendingToolCalls();
+        check(snapshot.size() == 1, "snapshot should expose one pending proposal");
+        SdsToolCall call = snapshot.get(0);
         check("call-1".equals(call.getId()), "wrong call id");
         check("workspace.list".equals(call.getName()), "wrong tool name");
         check(call.getArgumentsJson().contains("\"depth\":2"), "arguments changed");
-        check(SdsAgentHooks.pendingCount() == 0, "poll must remove proposal");
-
-        SdsAgentHooks.clearPendingCalls();
-        SdsAgentHooks.observeResponse(payload);
-        check(SdsAgentHooks.snapshotPendingToolCalls().size() == 1,
-                "snapshot should expose pending proposals without consuming them");
+        check(SdsAgentHooks.pendingCount() == 1,
+                "snapshot must not consume the proposal");
         check(SdsAgentHooks.dismissPendingToolCall("call-1"),
                 "dismiss should remove an existing proposal");
         check(SdsAgentHooks.pendingCount() == 0, "dismiss must remove the proposal");
