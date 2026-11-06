@@ -27,6 +27,9 @@ jobs:
           distribution: temurin
           java-version: "21"
 
+      - name: Run approval-first native core regression tests
+        run: bash scripts/test-agent-core.sh
+
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
