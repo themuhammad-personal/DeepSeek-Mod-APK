@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: read
+  packages: read
 
 jobs:
   verify:
@@ -28,11 +29,19 @@ jobs:
         with:
           gradle-version: "9.8.2"
 
-      - name: Set up Android build tools
+      - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
 
-      - name: Install Android build tools
-        run: sdkmanager "build-tools;36.0.0"
+      - name: Install Android SDK platform and build tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkmanager --install "platforms;android-36" "build-tools;36.0.0"
+          test -s "$ANDROID_HOME/platforms/android-36/android.jar"
+          test -x "$ANDROID_HOME/build-tools/36.0.0/aapt"
+          test -x "$ANDROID_HOME/build-tools/36.0.0/apksigner"
 
       - name: Run approval-first native core tests
         run: bash scripts/test-agent-core.sh
@@ -48,10 +57,11 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/deepseek-verify"
-          curl --fail --location --retry 3 \
+          curl --fail --location --retry 3 --max-time 300 \
             https://download.deepseek.com/apk/deepseek.apk \
-            --output "$RUNNER_TEMP/deepseek-verify/deepsek.apk"
-          echo "a868bad448c87444f6c825b5ddbfa23756ad34178ab08503d107ff8e29b4f022 $RUNNER_TEMP/deepseek-verify/deepsek.apk" | sha256sum --check
+            --output "$RUNNER_TEMP/deepseek-verify/deepseek.apk"
+          echo "a868bad448c87444f6c825b5ddbfa23756ad34178ab08503d107ff8e29b4f022 $RUNNER_TEMP/deepseek-verify/deepseek.apk" | sha256sum --check
+
       - name: Download pinned Morphe Desktop CLI
         shell: bash
         run: |
@@ -60,6 +70,7 @@ jobs:
             https://github.com/MorpheApp/morphe-desktop/releases/download/v2.1.1/morphe-desktop-2.1.1-all.jar \
             --output "$RUNNER_TEMP/deepseek-verify/morphe-desktop.jar"
           echo "3a2efefd567b44dde15971a58d5aa649a32aba30781d3400dc08d688c720168f $RUNNER_TEMP/deepseek-verify/morphe-desktop.jar" | sha256sum --check
+
       - name: Apply only the compatibility and experimental hook patches
         shell: bash
         run: |
@@ -71,10 +82,10 @@ jobs:
             --enable "DeepSeek 2.7.4 compatibility check" \
             --enable "Native Agent hook points (experimental)" \
             --verify-with-sdk "$ANDROID_HOME" \
-            --result-file "$RUNNER_TEMP/deepsek-verify/patch-result.json" \
-            --out "$RUNNER_TEMP/deepseek-verify/deepsek-patched.apk" \
+            --result-file "$RUNNER_TEMP/deepseek-verify/patch-result.json" \
+            --out "$RUNNER_TEMP/deepseek-verify/deepseek-patched.apk" \
             "$RUNNER_TEMP/deepseek-verify/deepseek.apk"
-          test -s "$RUNNER_TEMP/deepsek-verify/patch-result.json"
+          test -s "$RUNNER_TEMP/deepseek-verify/patch-result.json"
           python3 - "$RUNNER_TEMP/deepseek-verify/patch-result.json" <<'PYRESULT'
           import json, sys
           data = json.load(open(sys.argv[1], encoding='utf-8'))
@@ -91,10 +102,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          APK="$RUNNER_TEMP/deepsek-verify/deepsek-patched.apk"
+          APK="$RUNNER_TEMP/deepseek-verify/deepseek-patched.apk"
           AAPT="$ANDROID_HOME/build-tools/36.0.0/aapt"
           APKSIGNER="$ANDROID_HOME/build-tools/36.0.0/apksigner"
-          "$AAPT" dump badging "$APK" > "$RUNNER_TEMP/deepsek-verify/badging.txt"
+          "$AAPT" dump badging "$APK" > "$RUNNER_TEMP/deepseek-verify/badging.txt"
           grep -F "package: name='com.deepseek.chat' versionCode='293' versionName='2.7.4'" "$RUNNER_TEMP/deepseek-verify/badging.txt"
           "$APKSIGNER" verify --verbose "$APK"
           python3 - "$APK" <<'PY'
