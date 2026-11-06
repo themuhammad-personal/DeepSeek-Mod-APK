@@ -54,6 +54,16 @@ public final class SdsAgentCoreSelfTest {
         check("workspace.list".equals(call.getName()), "wrong tool name");
         check(call.getArgumentsJson().contains("\"depth\":2"), "arguments changed");
         check(SdsAgentHooks.pendingCount() == 0, "poll must remove proposal");
+
+        SdsAgentHooks.clearPendingCalls();
+        SdsAgentHooks.observeResponse(payload);
+        check(SdsAgentHooks.snapshotPendingToolCalls().size() == 1,
+                "snapshot should expose pending proposals without consuming them");
+        check(SdsAgentHooks.dismissPendingToolCall("call-1"),
+                "dismiss should remove an existing proposal");
+        check(SdsAgentHooks.pendingCount() == 0, "dismiss must remove the proposal");
+        check(!SdsAgentHooks.dismissPendingToolCall("call-1"),
+                "dismiss should report false for an absent proposal");
         SdsAgentHooks.setEnabled(false);
     }
 

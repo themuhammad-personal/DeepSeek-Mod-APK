@@ -2,71 +2,77 @@
 
 A custom Morphe Patcher project for building native Android feature patches for the official DeepSeek application.
 
-The user's `Super-Deepseek-` project is used as the **feature and UX reference**, not as a bundle of web code to inject into the native app. Browser-only modules are redesigned as Android-native DEX extensions and narrow Morphe patches.
+The user's Super-Deepseek- repository is the feature and UX reference, not source code to copy into the APK. Browser-only modules are redesigned as Android-native DEX extensions and narrow Morphe patches.
 
 > Independent project. Not affiliated with or endorsed by DeepSeek or Morphe. The official DeepSeek APK, decoded sources, credentials and signing keys are not committed.
 
-## Current target
+## Inspected target
 
 | Property | Inspected sample |
 |---|---|
-| Package | `com.deepseek.chat` |
-| Version | `2.7.4` (`versionCode 293`) |
-| Supported target | `2.7.4` only |
-| APK SHA-256 | `a868bad448c87444f6c825b5ddbfa23756ad34178ab08503d107ff8e29b4f022` |
+| Package | com.deepseek.chat |
+| Version | 2.7.4 (versionCode 293) |
+| Supported target | 2.7.4 only |
+| APK SHA-256 | a868bad448c87444f6c825b5ddbfa23756ad34178ab08503d107ff8e29b4f022 |
 
-See [target APK evidence](docs/TARGET-APK.md) before supporting another release.
+See docs/TARGET-APK.md before supporting another release.
 
 ## Implemented in this phase
 
-- Morphe Patcher project and successful `.mpp` bundle CI.
-- Structural fingerprints for the exact prompt-field serializer call and response content deserializer result.
-- Compatibility gate and optional launcher label change.
-- DEX extension with approval-first policy defaults, bounded tool-call model, strict proposal parser and workspace path guard.
-- A default-off experimental patch that wires the two verified method seams to native request/response hooks.
-- Device-free Java regression tests for strict JSON parsing, opt-in hooks, bounded queue, execution policy and workspace path validation.
-- A manual APK verification workflow that takes an HTTPS APK URL and its SHA-256, checks the exact target package/version, applies the MPP with Morphe Desktop 2.1.1, then verifies the patched APK package/version/signature and merged DEX.
+- Morphe Patcher project with successful MPP bundle CI.
+- Structural fingerprints for the inspected prompt serializer field and response content deserializer.
+- Compatibility gate and optional launcher label patch.
+- DEX extension with approval-first policy defaults, strict bounded tool proposal parser, and app-private workspace path guard.
+- Default-off experimental hooks that add tool-format guidance to the inspected prompt serializer and collect parsed proposal envelopes from deserialized assistant content.
+- A separate, default-off Native Agent Console Activity. When selected with the hook patch, it adds a second launcher entry for toggling session-only proposal mode, refreshing the proposal queue, copying arguments, dismissing proposals, or clearing the queue.
+- Device-free Java regression tests for parsing, queue bounds, proposal snapshot/dismiss, execution policy, and path confinement.
+- A manual verification workflow that applies selected patches to an exact hash-pinned APK and checks package, version, signing validity, manifest Activity, and merged extension DEX.
 
-The latest MPP build succeeded on branch `work/morphe-foundation`. Its workflow artifact is available from the branch's [Build Morphe patch bundle](https://github.com/themuhammad-personal/DeepSeek-Mod-APK/actions) run.
+## Current Native Agent Console scope
 
-## Current patch-application status
+The console is deliberately a proposal-review surface, not a command executor. No shell process, MCP call, network request, file write or automatic tool approval is implemented. The Dismiss action only removes the selected proposal. Agent/proposal mode is off by default and is session-only; it resets when the app process restarts. The separate launcher entry is a temporary integration point until the native Compose chat navigation and response-rendering lifecycle are verified.
 
-The supplied APK analysis is for DeepSeek 2.7.4. The official download URL is a moving "latest APK" endpoint; the verification workflow recently downloaded a different binary whose SHA-256 no longer matched the inspected 2.7.4 sample. The workflow correctly stopped before applying old fingerprints to an unknown build.
+The response hook observes a deserialized content field. It is not a verified incremental SSE callback or Compose renderer hook, and it does not provide reliable message-to-tool-result handoff. This branch is a patch and native review-console foundation, not a complete ChatGPT/Claude-like agent.
 
-To run full static patch verification, dispatch [Verify Morphe patch against official DeepSeek APK](https://github.com/themuhammad-personal/DeepSeek-Mod-APK/actions/workflows/verify-patched-apk.yml) from branch `work/morphe-foundation` and provide a direct HTTPS URL plus SHA-256 for the exact 2.7.4 APK. The APK is downloaded to a temporary runner directory, checked for package/version and deleted at job end. Do not use the moving latest URL unless its SHA and package/version match the expected sample.
-
-## Important current limitation
-
-The experimental response hook observes the deserialized message content. It is **not** a verified SSE streaming callback or Compose renderer hook. The current branch does not execute shell commands, call MCP, display a native approval UI or feed tool results back to the model. The native proposal queue is in-memory. Therefore, this is a verified patch/integration foundation, **not yet a complete ChatGPT/Claude-like agent**.
-
-See [Native Agent Runtime Foundation](docs/AGENT-RUNTIME-FOUNDATION.md) and [Feature Port Map](docs/FEATURE-PORT-MAP.md).
+See docs/AGENT-RUNTIME-FOUNDATION.md, docs/NATIVE-AGENT-CONSOLE.md and docs/FEATURE-PORT-MAP.md.
 
 ## Build
 
 Requirements: JDK 21, Gradle 9.8.2 and access to the Morphe GitHub Packages registry.
 
-Set `gpr.user` and `gpr.key` in Gradle user properties, or use the GitHub Actions `GITHUB_TOKEN` in CI. Then run:
+    bash scripts/test-agent-core.sh
+    gradle --no-daemon buildAndroid
 
-```bash
-bash scripts/test-agent-core.sh
-gradle --no-daemon buildAndroid
-```
+The MPP bundle is produced in patches/build/libs/. For a test build select these patches in order:
 
-The `.mpp` bundle is produced in `patches/build/libs/`. Select the compatibility patch first. The experimental native agent hook patch is **disabled by default** and should only be selected on the exact inspected target while testing.
+1. DeepSeek 2.7.4 compatibility check
+2. Native Agent hook points (experimental)
+3. Super DeepSeek native Agent Console
+
+The hook and console patches are disabled by default and only target the exact inspected APK version.
+
+## APK apply verification status
+
+The sample APK analysis is for DeepSeek 2.7.4. The official download URL is a moving latest-version endpoint; a recent workflow downloaded a different binary and stopped at the SHA-256 check before applying any patch. This is intentional: never apply old R8 fingerprints to an uninspected version.
+
+Dispatch the Verify Morphe patch against official DeepSeek APK workflow from branch work/morphe-foundation and provide a stable HTTPS URL plus SHA-256 for the exact inspected 2.7.4 sample. The workflow deletes temporary APKs at job completion and does not publish them.
 
 ## Security and identity
 
 - Preserve official account sign-in and session behaviour.
 - Do not bypass CAPTCHA, anti-fraud, anti-tamper, signature, root-detection, device-integrity or risk checks.
 - Do not intercept TLS, install user certificates, extract session tokens or rewrite authentication requests.
-- Model output is untrusted input. Tool proposals are never executed by the current extension.
-- A re-signed APK will not use DeepSeek's original certificate and may not update the official installation in place. Keep the original installation and its data intact until separately verified.
-- Check applicable app terms and third-party licenses before distributing any patch or modified binary.
+- Model output is untrusted. Tool proposals are never executed by this branch.
+- A re-signed APK will not use DeepSeek's original certificate and may not update the official installation in place. Keep the official installation and its data intact until a separate build is verified.
+- PRoot, if introduced later, runs under the app UID and is not a kernel-level security boundary.
+- Check applicable app terms and third-party licenses before distributing patches or modified binaries.
 
 ## Project map
 
-- [Architecture](docs/ARCHITECTURE.md)
-- [Target APK evidence](docs/TARGET-APK.md)
-- [Feature port map](docs/FEATURE-PORT-MAP.md)
-- [Agent runtime foundation](docs/AGENT-RUNTIME-FOUNDATION.md)
-- [Security boundaries](docs/SECURITY-BOUNDARIES.md)
+- Architecture
+- Target APK evidence
+- Feature port map
+- Agent runtime foundation
+- Native Agent Console
+- Security boundaries
+- Build and verification

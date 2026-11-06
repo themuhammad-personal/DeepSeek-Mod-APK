@@ -1,28 +1,30 @@
 # Build and patch verification
 
-Two separate CI checks are used:
+Two independent CI workflows are used.
 
-1. `Build Morphe patch bundle` builds the `.mpp` and `.mpe` files. This check is triggered by pushes to the working branch.
-2. `Verify Morphe patch against official DeepSeek APK` is manually dispatched with an HTTPS APK URL and the expected SHA-256. It runs the device-free Java regression test, verifies the APK checksum and exact `com.deepseek.chat 2.7.4 (versionCode 293)` identity, builds the MPP, runs Morphe fingerprint validation and Android SDK verification, applies only the compatibility and experimental hook patches with Morphe Desktop 2.1.1, and verifies the resulting APK package/version/signature and merged DEX class/hook references.
+1. Build Morphe patch bundle runs the Java agent-core regression tests and builds the MPP/MPE bundle on pushes to the working branch.
+2. Verify Morphe patch against official DeepSeek APK is manually dispatched with an HTTPS URL and SHA-256 for the exact inspected APK. It checks package/version, builds the MPP, validates the fingerprints, applies the compatibility, experimental hook and optional native console patches, then verifies the resulting APK signature, launcher Activity in the manifest and merged extension DEX classes.
 
-The official download URL is a moving latest-version endpoint. When it stops serving the inspected 2.7.4 sample, the old SHA check intentionally fails before Morphe touches the APK. Supply a stable HTTPS location for the exact 2.7.4 APK and its SHA-256 to the manual workflow. Never replace the pinned target hash with the hash of an uninspected release.
+The live DeepSeek download URL is a moving latest-version endpoint. When it stops serving the inspected 2.7.4 sample, the SHA check intentionally fails before Morphe applies any patch. Supply a stable HTTPS source for the exact sample and its known SHA-256; do not change the pinned hash to match an uninspected version.
 
-The original and patched APKs are temporary CI files and are deleted at job completion. They are not uploaded as release assets. This is a static/build-time integration check only. It does not prove app installation, account login, CAPTCHA/risk behaviour, runtime callback frequency, Compose rendering or real-device execution.
+The original and patched APKs are temporary CI files and are deleted at job completion. They are not uploaded as release assets. This is static/build-time integration evidence only. It does not prove app installation, account login, CAPTCHA/risk behaviour, correct response-hook frequency, Compose rendering or real-device execution.
 
-## Results from this phase
+## Current CI evidence
 
-- `scripts/test-agent-core.sh`: PASS (25 checks).
-- Morphe `buildAndroid`: PASS; `.mpp` artifact uploaded by GitHub Actions.
-- Official APK apply: **not yet verified**. The live download endpoint returned a binary with a different SHA-256 from the supplied 2.7.4 sample; the workflow stopped safely before applying the patch.
+- Native core Java regression test passed in the latest MPP run.
+- Morphe buildAndroid completed and uploaded the MPP artifact.
+- The manual APK verification workflow stopped at the source APK SHA-256 check because the moving download endpoint returned a different binary. Morphe apply and patched APK checks were therefore skipped.
+- After adding the separate Agent Console, the next manual APK verification must additionally confirm its exported launcher Activity in the final manifest and the Activity class in the merged DEX.
 
-Local agent-core regression test:
+## Local checks
 
-```bash
-bash scripts/test-agent-core.sh
-```
+    bash scripts/test-agent-core.sh
+    gradle --no-daemon buildAndroid
 
-MPP build:
+## Manual device checks still required
 
-```bash
-gradle --no-daemon buildAndroid
-```
+- Install a separately patched APK without uninstalling or erasing the user's official DeepSeek installation.
+- Confirm launcher Activity starts and renders on the target Android version.
+- Confirm the original DeepSeek MainActivity and login/session flow remain unchanged.
+- Enable proposal mode, send a test chat, refresh the console, and check whether the inspected content-deserializer callback actually receives final assistant content.
+- Check that proposals are not executed, that Dismiss removes them, and that the console survives rotation without losing its UI state.

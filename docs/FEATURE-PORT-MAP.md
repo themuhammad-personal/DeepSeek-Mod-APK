@@ -1,13 +1,14 @@
 # Super DeepSeek → Native Android port map
 
-The Super DeepSeek repository is the product and feature reference. Its web implementation is not copied into this APK project. Each capability must be re-designed around the official Android app's native lifecycle, Compose UI, storage model and permissions.
+The Super DeepSeek repository is the product and UX reference. Its web implementation is not copied into the native APK. Each feature is redesigned around Android lifecycle, app-private storage, permissions and DeepSeek's native Compose chat surface.
 
-| Reference capability | Web implementation concept | Native port target | Status |
+| Reference capability | Web implementation concept | Native port target | Current state |
 |---|---|---|---|
-| AI Agent | sd-agent.js, prompt and tool loop | Kotlin AgentController + narrow request/response adapters | Planned; only static serializer/content seams identified |
-| Linux Studio | browser terminal and file workspace | Android Activity/Compose UI + app-private sandbox runtime | Planned; security design required |
-| MCP | sd-genui-mcp.js and browser fetch bridge | Kotlin MCP client, HTTP/Streamable HTTP transport, consent and credential store | Planned |
-| Generative UI | sd-genui*.js, HTML/CSS renderer | Schema-validated Compose renderer and native artifact viewer | Planned |
+| AI Agent | sd-agent.js, prompt and tool loop | DEX request/response adapters + native AgentController | Experimental prompt and response hooks; proposal queue only; full loop not connected |
+| Tool review | tool cards and ask/approve UI | Android Activity proposal console | Implemented as a separate launcher Activity; review/dismiss only, no execution |
+| Linux Studio | browser terminal and file workspace | Native Activity + app-private sandbox runtime | Planned; security and lifecycle work required |
+| MCP | sd-genui-mcp.js and browser fetch bridge | Native MCP client with transport, consent and credential store | Planned |
+| Generative UI | sd-genui modules, HTML/CSS renderer | Schema-validated Compose renderer and native artifact viewer | Planned |
 | Memory | browser/local storage records | Encrypted or app-private persistent store with inspect/export/delete controls | Planned |
 | Personas and prompts | system prompt and profile settings | Native prompt profile manager | Planned |
 | Slash commands | web composer popup | Compose command palette and send-pipeline integration | Planned |
@@ -26,3 +27,4 @@ The Super DeepSeek repository is the product and feature reference. Its web impl
 - Reuse product terminology and documented behaviour as a design reference, but write Android-native implementations and tests.
 - Prefer stable app APIs and narrowly scoped fingerprints over broad method replacement.
 - Do not claim a feature is functional until target method, UI entry point, runtime behaviour and failure modes are verified.
+- Keep experimental patches disabled by default and scope each to the exact APK fingerprint set.

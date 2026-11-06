@@ -107,6 +107,7 @@ jobs:
             patch --patches "$MPP" --exclusive --validate --bytecode-mode FULL \
             --enable "DeepSeek 2.7.4 compatibility check" \
             --enable "Native Agent hook points (experimental)" \
+            --enable "Super DeepSeek native Agent Console" \
             --verify-with-sdk "$ANDROID_HOME" \
             --result-file "$RUNNER_TEMP/deepseek-verify/patch-result.json" \
             --out "$RUNNER_TEMP/deepseek-verify/deepseek-patched.apk" \
@@ -116,7 +117,7 @@ jobs:
           import json, sys
           data = json.load(open(sys.argv[1], encoding='utf-8'))
           text = json.dumps(data).lower()
-          for needle in ("deepseek 2.7.4 compatibility check", "native agent hook points (experimental)"):
+          for needle in ("deepseek 2.7.4 compatibility check", "native agent hook points (experimental)", "super deepseek native agent console"):
               assert needle in text, f"patch result does not mention expected patch: {needle}"
           for key in ("success", "succeeded"):
               if key in data and isinstance(data[key], bool):
@@ -134,6 +135,7 @@ jobs:
           "$AAPT" dump badging "$APK" > "$RUNNER_TEMP/deepseek-verify/patched-badging.txt"
           grep -F "package: name='com.deepseek.chat' versionCode='293' versionName='2.7.4'" "$RUNNER_TEMP/deepseek-verify/patched-badging.txt"
           "$APKSIGNER" verify --verbose "$APK"
+          "$AAPT" dump xmltree "$APK" AndroidManifest.xml | grep -F "com.themuhammad.deepseekmod.extension.SdsAgentConsoleActivity"
           python3 - "$APK" <<'PY'
           import sys, zipfile
           apk = sys.argv[1]
@@ -145,6 +147,7 @@ jobs:
                   b'Lcom/themuhammad/deepseekmod/extension/SdsCoreMarker;',
                   b'Lcom/themuhammad/deepseekmod/extension/SdsAgentHooks;',
                   b'Lcom/themuhammad/deepseekmod/extension/SdsToolCallParser;',
+                  b'Lcom/themuhammad/deepseekmod/extension/SdsAgentConsoleActivity;',
               ]
               for token in required:
                   assert token in merged, 'DEX extension class missing: ' + token.decode()
