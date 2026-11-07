@@ -66,20 +66,26 @@ what the next blocker is.
 
 | Claim | Label | Evidence |
 |---|---|---|
-| The patches apply to the inspected target and Morphe reports success | **patch-applied** | CI run `42349185806`, four patches applied, `success=True` |
+| The patches apply to the inspected target and Morphe reports success | **patch-applied** | CI run `42354635483` applied the **current** patch set to the pinned target: every step of the workflow succeeded, the four patches were applied and Morphe reported `success=True` |
 | The hook call sites read the register that the original code just wrote | **patch-applied** | the DEX comparison of the verifier, `OK beforePrompt receives the prompt register v8`, `OK observeResponse receives the accumulated content register v4` |
 | The guarded prompt is written back into the request | **patch-applied** | the verifier fails when it is not |
 | The observer runs after the update of the content | **patch-applied** | the verifier fails when it does not |
 | The extension is really in the bundle of the patched APK | **patch-applied** | 38 classes are looked up in the patched DEX |
 | The console is not exported and has no launcher entry | **patch-applied** | the manifest check of the verification workflow |
-| The runtime has no defect in the reviewed paths | **build-verified**, **regression-tested** | CI runs `42353976805` (bundle) and `42353976704` (verification), the regression test is green |
+| The runtime has no defect in the reviewed paths | **build-verified**, **regression-tested** | the bundle run `42354635470` and the verification run `42354635483`, the plain-Java regression test is green in both |
 | The MCP client speaks the protocol | **static-verified** against the specification of the protocol, **regression-tested** for the handshake | the request shape and the negotiation are covered by the test |
 | The address and the checksum of the root filesystem are the official ones | **verified online** | `https://cdimage.ubuntu.com/ubuntu-base/releases/noble/release/SHA256SUMS` |
 | The runtime works on a real phone | **NOT VERIFIED** | no device was available |
 | The PRoot runtime runs | **NOT VERIFIED** | the binaries are not bundled, so the studio refuses to run |
 | The tool result reaches the chat | **NOT VERIFIED** | the seam is proved in the DEX, the rendering is not |
 
-### The artefacts of the last full apply verification (run `42349185806`)
+### The artefacts of the earlier full apply verification (run `42349185806`)
+
+The newer run `42354635483` repeated the whole chain with the current patches
+and every step succeeded. Its summary carries the hashes of the rebuilt target
+and of the patched APK, but the summary of a finished run cannot be read back
+through the API, so the hashes below are the ones of the earlier run with the
+same source and the same pipeline.
 
 | Item | Value |
 |---|---|
@@ -89,9 +95,11 @@ what the next blocker is.
 | source bundle SHA-256 | `b0ec418ec9b8a273479acd8fed73acefbdbddd34162684c50e1737abb70d74de` |
 | Morphe patch bundle artefact | `sha256:ceac6957e34065d5c8de4bdeea507d07c87bef69b9542bcb8cc73f810aab43dd` |
 
-The runs after that one report `NOT VERIFIED`, because `.github/pinned-source.env`
+The runs without a pointer report `NOT VERIFIED`, because `.github/pinned-source.env`
 was deleted after the verification. The workflow skips every step and says so;
-it never reports a pass it did not perform.
+it never reports a pass it did not perform. The pointer was restored for the
+run `42354635483` and removed again right after it, and the link share of the
+file in the Drive of the owner was revoked again.
 
 ## 4. The next blocker
 

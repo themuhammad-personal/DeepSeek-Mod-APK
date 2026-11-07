@@ -226,6 +226,14 @@ and the artefacts of that run:
 The earlier P0 run `42336409045` proved the first three patches before the
 chat entry and the handback existed.
 
+The run `42354635483` repeated the whole chain with the **current** patch set
+(the console that is not exported, the runtime that starts with the chat
+screen, the chat entry, the handback and the stricter verification). Every step
+of the workflow succeeded: the pinned source was fetched and checked, the
+target was rebuilt, the four patches were applied, the patched APK passed the
+package, version, signature, alignment and manifest checks and the hook call
+sites were proved in the patched DEX.
+
 The run needs the hash-pinned source location, which is read from `.github/pinned-source.env`.
 That file points at the owner's own Drive copy and is **not part of the project**: it is removed
 after the verification, and the Drive link share is revoked. Without it the workflow resolves
