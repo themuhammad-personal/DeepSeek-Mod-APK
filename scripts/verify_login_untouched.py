@@ -38,6 +38,11 @@ except Exception:  # pragma: no cover - loguru is optional
 
 EXTENSION_PACKAGE = "Lcom/themuhammad/deepseekmod/extension/"
 
+# The patcher merges the Kotlin runtime into the app, because the patch bundle
+# is written in Kotlin. Those classes are the standard library of Kotlin and
+# they are not a change of the app itself.
+KOTLIN_RUNTIME = ("Lkotlin/", "Lkotlinx/")
+
 # The methods that the patches are allowed to change. The names are the ones
 # of the build that is being patched, so the script reads the version code of
 # the APK and picks the matching set.
@@ -167,18 +172,26 @@ def main() -> int:
         for key in unexpected[:10]:
             print(f"          {key[0]}->{key[1]}{key[2]}")
 
-    # 3. Every new class has to belong to the extension of this project.
+    # 3. Every new class has to belong to the extension of this project or to
+    #    the Kotlin runtime, which the patcher merges into the app.
     original_classes = {key[0] for key in original_methods}
     new_classes = sorted({key[0] for key in patched_methods} - original_classes)
-    foreign = [name for name in new_classes if not name.startswith(EXTENSION_PACKAGE)]
+    foreign = [
+        name
+        for name in new_classes
+        if not name.startswith(EXTENSION_PACKAGE)
+        and not name.startswith(KOTLIN_RUNTIME)
+    ]
+    runtime = [name for name in new_classes if name.startswith(KOTLIN_RUNTIME)]
     print(f"classes that were added: {len(new_classes)}")
+    print(f"  of those {len(runtime)} classes of the Kotlin runtime")
     if foreign:
         failures += 1
         print("FAILED: classes that do not belong to the extension were added")
         for name in foreign[:10]:
             print(f"          {name}")
     else:
-        print("  OK      every added class belongs to the extension of this project")
+        print("  OK      every added class belongs to the extension or to the Kotlin runtime")
 
     # 4. The extension must not change the classes of the login.
     login_words = ("login", "signin", "auth", "token", "captcha", "session")

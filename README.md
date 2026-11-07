@@ -77,6 +77,30 @@ The result is `build-local/deepseek-patched.apk`, together with its SHA-256
 and the proof of the hook call sites. The signing key is generated on your
 machine and stays there.
 
+## The patched APK from GitHub Actions
+
+The workflow **Build the patched DeepSeek APK** builds the patched app on
+every push that changes the patches, the extension or the harness. It
+downloads the file that the official download address serves, checks the
+fingerprint set of that build, applies the patches and keeps the result as an
+artifact of the run. The artifact expires after seven days.
+
+The official app is not redistributable, so the file is neither committed to
+this repository nor published as a release. The signature is a throwaway key
+of the build, so the app cannot update an official installation in place.
+
+Before the APK is uploaded, three harnesses have to pass:
+
+- the fingerprint set of the build has to resolve and the sets of the other
+  builds have to be absent,
+- the hook call sites have to be in the patched DEX,
+- **the login of the app must not be touched**: only the four methods that the
+  patches hook may differ from the original app, every added class has to
+  belong to the extension, and no method of the login, of the session or of
+  the anti-fraud code may change,
+- the app has to stay a native Android app: the extension may not use the web
+  kit of Android and the patched APK may not carry a web asset.
+
 ## APK apply verification
 
 The exact source APK must match the inspected 2.7.4 SHA-256. The current official download URL is a moving latest-version endpoint and has returned a different binary, so the verification workflow safely stops before applying old fingerprints. Supply a stable HTTPS URL and SHA-256 for the exact inspected APK; never change the hash to match an uninspected release.
@@ -92,7 +116,8 @@ See [docs/FINGERPRINTS.md](docs/FINGERPRINTS.md).
 |---|---|---|---|---|
 | 1 | 2.7.4 | 293 | 24 | patch-applied, stable target |
 | 2 | 2.7.4 | 294 | 29 | patch-applied, experimental |
-| 3 | 2.7.5 | 296 | 32 | patch-applied, experimental |
+| 3 | 2.7.5 | 295 | 24 | patch-applied, experimental, the build of the official download address |
+| 4 | 2.7.5 | 296 | 32 | patch-applied, experimental |
 
 A workflow reports what the official download address serves right now, so it
 is visible when DeepSeek publishes a build that needs a new fingerprint set.
