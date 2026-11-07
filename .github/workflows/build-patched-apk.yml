@@ -1,0 +1,232 @@
+name: Build installable DeepSeek APK
+
+on:
+  push:
+    branches:
+      - "apk-build/8bb57a23-deepseek-mod-apk"
+  workflow_dispatch:
+    inputs:
+      source_url:
+        description: "HTTPS download URL of the exact inspected source archive"
+        required: false
+        type: string
+      source_sha256:
+        description: "SHA-256 of the source archive"
+        required: false
+        type: string
+      source_format:
+        description: "Source type: extracted APK ZIP, APKM split package, or single APK"
+        required: false
+        type: choice
+        options:
+          - zip
+          - apkm
+          - apk
+        default: apkm
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: deepseek-apk-build-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-apk:
+    name: Build and verify signed APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Resolve private source settings
+        id: source
+        shell: bash
+        env:
+          INPUT_SOURCE_URL: ${{ inputs.source_url }}
+          INPUT_SOURCE_SHA256: ${{ inputs.source_sha256 }}
+          INPUT_SOURCE_FORMAT: ${{ inputs.source_format }}
+          SECRET_SOURCE_URL: ${{ secrets.SDS_SOURCE_URL }}
+          SECRET_SOURCE_SHA256: ${{ secrets.SDS_SOURCE_SHA256 }}
+          SECRET_SOURCE_FORMAT: ${{ secrets.SDS_SOURCE_FORMAT }}
+        run: |
+          set -euo pipefail
+          url="${INPUT_SOURCE_URL:-$SECRET_SOURCE_URL}"
+          sha="${INPUT_SOURCE_SHA256:-$SECRET_SOURCE_SHA256}"
+          format="${INPUT_SOURCE_FORMAT:-$SECRET_SOURCE_FORMAT}"
+          format="${format:-apkm}"
+
+          if [[ -z "$url" || -z "$sha" ]]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "## APK build not started"
+              echo
+              echo "Configure the repository Actions secrets `SDS_SOURCE_URL` and `SDS_SOURCE_SHA256`, then re-run this workflow."
+              echo "The source URL must be an HTTPS direct-download link to the exact APK, APKM or extracted APK ZIP."
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::notice::Pinned source settings are missing; no APK was built."
+            exit 0
+          fi
+
+          [[ "$url" == https://* ]] || { echo "::error::The source URL must use HTTPS."; exit 2; }
+          [[ "$sha" =~ ^[a-fA-F0-9]{64}$ ]] || { echo "::error::The source SHA-256 must be 64 hexadecimal characters."; exit 2; }
+          case "$format" in zip|apkm|apk) ;; *) echo "::error::SDS_SOURCE_FORMAT must be zip, apkm or apk."; exit 2 ;; esac
+
+          echo "ready=true" >> "$GITHUB_OUTPUT"
+          echo "source_url=$url" >> "$GITHUB_OUTPUT"
+          echo "source_sha256=${sha,,}" >> "$GITHUB_OUTPUT"
+          echo "source_format=$format" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Java 21
+        if: steps.source.outputs.ready == 'true'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Gradle
+        if: steps.source.outputs.ready == 'true'
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "9.8.2"
+
+      - name: Set up Android SDK
+        if: steps.source.outputs.ready == 'true'
+        uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+
+      - name: Install Android SDK platform and build tools
+        if: steps.source.outputs.ready == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkmanager --install "platforms;android-36" "build-tools;36.0.0"
+          test -s "$ANDROID_HOME/platforms/android-36/android.jar"
+          test -x "$ANDROID_HOME/build-tools/36.0.0/aapt"
+          test -x "$ANDROID_HOME/build-tools/36.0.0/apksigner"
+          test -x "$ANDROID_HOME/build-tools/36.0.0/zipalign"
+
+      - name: Run native agent regression tests
+        if: steps.source.outputs.ready == 'true'
+        run: bash scripts/test-agent-core.sh
+
+      - name: Build Morphe patch bundle
+        if: steps.source.outputs.ready == 'true'
+        shell: bash
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gradle --no-daemon buildAndroid
+          MPP="$(find patches/build/libs -maxdepth 1 -name '*.mpp' -print -quit)"
+          test -n "$MPP"
+          echo "MPP=$MPP" >> "$GITHUB_ENV"
+
+      - name: Download and verify the pinned source
+        if: steps.source.outputs.ready == 'true'
+        shell: bash
+        env:
+          SOURCE_URL: ${{ steps.source.outputs.source_url }}
+          SOURCE_SHA256: ${{ steps.source.outputs.source_sha256 }}
+          SOURCE_FORMAT: ${{ steps.source.outputs.source_format }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/deepseek-source"
+          SOURCE_FILE="$RUNNER_TEMP/deepseek-source/source.$SOURCE_FORMAT"
+          curl --proto '=https' --tlsv1.2 --fail --location --retry 3 --max-time 900 \
+            "$SOURCE_URL" --output "$SOURCE_FILE"
+          echo "$SOURCE_SHA256  $SOURCE_FILE" | sha256sum --check
+          echo "SOURCE_FILE=$SOURCE_FILE" >> "$GITHUB_ENV"
+
+      - name: Prepare optional persistent signing key
+        if: steps.source.outputs.ready == 'true'
+        shell: bash
+        env:
+          SIGNING_KEY_BASE64: ${{ secrets.SDS_SIGNING_KEY_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.SDS_KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.SDS_KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.SDS_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/deepseek-build"
+          if [[ -n "$SIGNING_KEY_BASE64" ]]; then
+            [[ -n "$KEYSTORE_PASSWORD" && -n "$KEY_PASSWORD" && -n "$KEY_ALIAS" ]] || {
+              echo "::error::When SDS_SIGNING_KEY_BASE64 is set, also configure SDS_KEYSTORE_PASSWORD, SDS_KEY_PASSWORD and SDS_KEY_ALIAS."
+              exit 2
+            }
+            printf '%s' "$SIGNING_KEY_BASE64" | base64 --decode > "$RUNNER_TEMP/deepseek-build/sds-local.keystore"
+            test -s "$RUNNER_TEMP/deepseek-build/sds-local.keystore"
+            echo "A persistent signing key was loaded from Actions secrets."
+          else
+            echo "::warning::No persistent signing key is configured. A temporary key will be generated; later APK builds cannot update this installation."
+          fi
+
+      - name: Patch, sign and verify the APK
+        if: steps.source.outputs.ready == 'true'
+        shell: bash
+        env:
+          SDS_KEYSTORE_PASSWORD: ${{ secrets.SDS_KEYSTORE_PASSWORD }}
+          SDS_KEY_PASSWORD: ${{ secrets.SDS_KEY_PASSWORD }}
+          SDS_KEY_ALIAS: ${{ secrets.SDS_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          bash scripts/build-patched-apk.sh \
+            --mpp "$MPP" \
+            --source-file "$SOURCE_FILE" \
+            --source-sha256 "${{ steps.source.outputs.source_sha256 }}" \
+            --out "$RUNNER_TEMP/deepseek-build"
+
+          APK="$RUNNER_TEMP/deepseek-build/deepseek-patched.apk"
+          test -s "$APK"
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose "$APK"
+          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$APK" | grep -F "package: name='com.deepseek.chat'"
+          sha256sum "$APK" > "$APK.sha256"
+          echo "APK_SHA256=$(sha256sum "$APK" | awk '{print $1}')" >> "$GITHUB_ENV"
+          echo "APK_SIZE=$(stat -c%s "$APK")" >> "$GITHUB_ENV"
+
+      - name: Publish short-lived APK artifact
+        if: steps.source.outputs.ready == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: deepseek-patched-apk
+          path: |
+            ${{ runner.temp }}/deepseek-build/deepseek-patched.apk
+            ${{ runner.temp }}/deepseek-build/deepseek-patched.apk.sha256
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Write build summary
+        if: always()
+        shell: bash
+        env:
+          READY: ${{ steps.source.outputs.ready }}
+          SOURCE_FORMAT: ${{ steps.source.outputs.source_format }}
+          SOURCE_SHA256: ${{ steps.source.outputs.source_sha256 }}
+          APK_SHA256: ${{ env.APK_SHA256 }}
+          APK_SIZE: ${{ env.APK_SIZE }}
+          SIGNING_KEY_CONFIGURED: ${{ secrets.SDS_SIGNING_KEY_BASE64 != '' }}
+        run: |
+          {
+            echo "## DeepSeek patched APK build"
+            echo
+            if [[ "$READY" != "true" ]]; then
+              echo "No APK was built. Configure the pinned source secrets and re-run."
+            else
+              echo "- Target source type: $SOURCE_FORMAT"
+              echo "- Source SHA-256: $SOURCE_SHA256"
+              echo "- APK size: $APK_SIZE bytes"
+              echo "- APK SHA-256: `$APK_SHA256`"
+              if [[ "$SIGNING_KEY_CONFIGURED" == "true" ]]; then
+                echo "- Signing: persistent owner-provided key"
+              else
+                echo "- Signing: temporary key for this run only"
+              fi
+              echo "- Artifact: `deepseek-patched-apk` (available for 1 day)"
+              echo
+              echo "**Public-repository notice:** anyone with read access can download this Actions artifact while it exists. The source archive and signing key are not uploaded."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -38,6 +38,7 @@ MPP=""
 SOURCE_FILE=""
 SOURCE_URL="${SDS_SOURCE_URL:-https://drive.usercontent.google.com/download?id=1zKivuIhspDNuEpI74Q0QLtAP7ZtDfMM0&export=download&confirm=t}"
 SOURCE_SHA256="${SDS_SOURCE_SHA256:-b0ec418ec9b8a273479acd8fed73acefbdbddd34162684c50e1737abb70d74de}"
+SOURCE_FORMAT="${SDS_SOURCE_FORMAT:-zip}"
 OUT="$WORK"
 PROROOT_DIR="${SDS_PROROOT_DIR:-}"
 
@@ -50,6 +51,7 @@ while [[ $# -gt 0 ]]; do
     --source-file) SOURCE_FILE="$2"; shift 2 ;;
     --source-url) SOURCE_URL="$2"; shift 2 ;;
     --source-sha256) SOURCE_SHA256="$2"; shift 2 ;;
+    --source-format) SOURCE_FORMAT="$2"; shift 2 ;;
     --out) OUT="$2"; shift 2 ;;
     --proroot-dir) PROROOT_DIR="$2"; shift 2 ;;
     -h|--help) sed -n '2,30p' "${BASH_SOURCE[0]}"; exit 0 ;;
@@ -94,32 +96,45 @@ if [[ -z "$MPP" ]]; then
 fi
 [[ -f "$MPP" ]] || die "the bundle $MPP does not exist"
 
-# 3. The pinned extraction of the official app.
-say "the pinned extraction of the official app"
+# 3. The pinned source of the official app. Preserve its extension so an
+#    APKM is never mistaken for an extracted ZIP after it is copied to WORK.
+say "the pinned source of the official app"
+case "$SOURCE_FORMAT" in
+  zip|apkm|apk) ;;
+  *) die "source format must be zip, apkm or apk" ;;
+esac
+PINNED_SOURCE="$WORK/pinned-source.$SOURCE_FORMAT"
 if [[ -n "$SOURCE_FILE" ]]; then
   [[ -f "$SOURCE_FILE" ]] || die "the file $SOURCE_FILE does not exist"
-  cp -f "$SOURCE_FILE" "$WORK/pinned-extraction.zip"
-fi
-if [[ ! -f "$WORK/pinned-extraction.zip" ]]; then
+  case "${SOURCE_FILE##*.}" in
+    zip|apkm|apk) PINNED_SOURCE="$WORK/pinned-source.${SOURCE_FILE##*.}" ;;
+    ZIP|APKM|APK) PINNED_SOURCE="$WORK/pinned-source.${SOURCE_FILE##*.}" ;;
+    *) die "source file must be a .zip, .apkm or .apk file" ;;
+  esac
+  cp -f "$SOURCE_FILE" "$PINNED_SOURCE"
+else
   [[ "$SOURCE_URL" == https://* ]] || die "the source address must use https"
   curl --proto '=https' --tlsv1.2 --fail --location --retry 3 --max-time 900 \
-    "$SOURCE_URL" --output "$WORK/pinned-extraction.zip"
+    "$SOURCE_URL" --output "$PINNED_SOURCE"
 fi
-echo "$SOURCE_SHA256  $WORK/pinned-extraction.zip" | sha256sum --check \
-  || die "the checksum of the extraction bundle does not match the pinned one"
+echo "$SOURCE_SHA256  $PINNED_SOURCE" | sha256sum --check \
+  || die "the source checksum does not match the pinned SHA-256"
 
-# 4. The target APK.
+# 4. Prepare the APK that corresponds to the source format.
 say "the target APK"
-if [[ "$WORK/pinned-extraction.zip" == *.apkm ]]; then
-  # The build with the version code 294 is distributed as a split package. The
-  # base APK of that package is the app itself and it is patched directly.
-  unzip -o -q "$WORK/pinned-extraction.zip" base.apk -d "$WORK"
+if [[ "$PINNED_SOURCE" == *.apkm || "$PINNED_SOURCE" == *.APKM ]]; then
+  # Split packages contain a base APK plus optional configuration splits. The
+  # inspected Morphe hooks live in base.apk; the output here is a patched base APK.
+  unzip -o -q "$PINNED_SOURCE" base.apk -d "$WORK"
   [[ -s "$WORK/base.apk" ]] || die "the APKM does not contain base.apk"
   cp -f "$WORK/base.apk" "$WORK/deepseek-pinned.apk"
   echo "the base APK of the APKM is the target"
+elif [[ "$PINNED_SOURCE" == *.apk || "$PINNED_SOURCE" == *.APK ]]; then
+  cp -f "$PINNED_SOURCE" "$WORK/deepseek-pinned.apk"
+  echo "the supplied APK is the target"
 else
   python3 "$ROOT/scripts/rebuild-pinned-apk.py" \
-    "$WORK/pinned-extraction.zip" "$WORK/deepseek-pinned-unaligned.apk"
+    "$PINNED_SOURCE" "$WORK/deepseek-pinned-unaligned.apk"
   "$BUILD_TOOLS/zipalign" -f -p 4 \
     "$WORK/deepseek-pinned-unaligned.apk" "$WORK/deepseek-pinned.apk"
 fi
@@ -167,20 +182,25 @@ if [[ -n "$PROROOT_DIR" ]]; then
     "$WORK/deepseek-patched-unsigned.apk" "$PROROOT_DIR"
 fi
 
-# 7. The signature. The key is generated on this machine and never leaves it.
+# 7. Sign the patched APK. CI may provide a persistent keystore through
+#    environment variables; otherwise a one-run local key is generated.
 say "the signature"
 KEYSTORE="$WORK/sds-local.keystore"
+KEY_ALIAS="${SDS_KEY_ALIAS:-sds}"
+KEYSTORE_PASSWORD="${SDS_KEYSTORE_PASSWORD:-sds-local}"
+KEY_PASSWORD="${SDS_KEY_PASSWORD:-sds-local}"
 if [[ ! -f "$KEYSTORE" ]]; then
   keytool -genkeypair -v -keystore "$KEYSTORE" \
-    -alias sds -keyalg RSA -keysize 2048 -validity 10000 \
-    -storepass sds-local -keypass sds-local \
-    -dname "CN=Super DeepSeek Local, OU=Local, O=Local, L=Local, S=Local, C=BD" \
+    -alias "$KEY_ALIAS" -keyalg RSA -keysize 3072 -validity 10000 \
+    -storepass "$KEYSTORE_PASSWORD" -keypass "$KEY_PASSWORD" \
+    -dname "CN=Super DeepSeek Local, OU=Local, O=Local, L=Local, S=BD, C=BD" \
     >/dev/null
-  echo "a local signing key was created in $KEYSTORE"
-  echo "keep it: without it you cannot update the app later"
+  echo "a new signing key was generated at $KEYSTORE"
+  echo "keep this key to install future builds as updates"
 fi
 "$BUILD_TOOLS/apksigner" sign \
-  --ks "$KEYSTORE" --ks-pass pass:sds-local --key-pass pass:sds-local \
+  --ks "$KEYSTORE" --ks-key-alias "$KEY_ALIAS" \
+  --ks-pass "pass:$KEYSTORE_PASSWORD" --key-pass "pass:$KEY_PASSWORD" \
   --out "$WORK/deepseek-patched-signed.apk" \
   "$WORK/deepseek-patched-unsigned.apk"
 "$BUILD_TOOLS/zipalign" -f -p 4 \
