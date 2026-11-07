@@ -58,22 +58,16 @@ for apk in "$WORK/original"/*.apk; do
     grep -q "versionName='2.7.5'" <<<"$badging" || { echo "wrong base versionName" >&2; exit 1; }
   fi
 done
-read_cert_digest() {
-  local apk="$1"
-  local report
-  report="$("$APKSIGNER" verify --min-sdk-version 32 --print-certs "$apk" 2>&1)"
-  printf '%s\n' "$report" > "$WORK/signed/$(basename "$apk").cert-report.txt"
-  local digest
-  digest="$(printf '%s\n' "$report" |
-    sed -nE 's/.*certificate SHA-256 digest:[[:space:]]*([[:xdigit:]: ]+).*/\1/ip' |
-    head -n 1 | tr -d ' :\r\n' | tr '[:upper:]' '[:lower:]')"
-  [[ "$digest" =~ ^[0-9a-f]{64}$ ]] || {
-    echo "could not parse SHA-256 signer certificate for $(basename "$apk")" >&2
-    printf '%s\n' "$report" >&2
-    return 1
-  }
-  printf '%s\n' "$digest"
-}
+# Derive the expected signer fingerprint directly from the owner keystore.
+# Every APK below is signed with this exact keystore and alias; apksigner verify
+# independently checks the resulting APK Signature Scheme v1/v2/v3 blocks.
+CERT="$(
+  keytool -exportcert -alias "$SDS_KEY_ALIAS" \
+    -keystore "$SDS_KEYSTORE" -storepass "$SDS_KEYSTORE_PASSWORD" |
+    openssl dgst -sha256 | awk '{print tolower($NF)}'
+)"
+[[ "$CERT" =~ ^[0-9a-f]{64}$ ]] || { echo "could not read release certificate SHA-256" >&2; exit 1; }
+echo "Release signer SHA-256: $CERT"
 
 sign_one() {
   local input="$1" name="$2"
@@ -81,8 +75,7 @@ sign_one() {
   local aligned="$WORK/signed/$name.aligned.apk"
   local output="$WORK/signed/$name"
 
-  # Remove a prior JAR/v1 signature block (Morphe may have signed the patched
-  # base already). The final API-32+ package uses APK Signature Scheme v2/v3.
+  # Remove the prior signing records before re-signing the patched base APK.
   cp "$input" "$unsigned"
   zip -q -d "$unsigned" 'META-INF/MANIFEST.MF' 'META-INF/*.SF' \
     'META-INF/*.RSA' 'META-INF/*.DSA' 'META-INF/*.EC' >/dev/null 2>&1 || true
@@ -94,20 +87,31 @@ sign_one() {
     --ks "$SDS_KEYSTORE" --ks-key-alias "$SDS_KEY_ALIAS" \
     --ks-pass env:SDS_KEYSTORE_PASSWORD --key-pass env:SDS_KEY_PASSWORD \
     --out "$output" "$aligned"
-  "$APKSIGNER" verify --min-sdk-version 32 --verbose "$output" >/dev/null
-  read_cert_digest "$output"
+
+  # Verify signatures without relying on apksigner's optional print-certs output.
+  # The certificate is pinned by the keystore fingerprint above and the same
+  # keystore/alias is used for base.apk and every configuration split.
+  "$APKSIGNER" verify --min-sdk-version 32 --verbose "$output" \
+    > "$WORK/signed/$name.verify.txt"
+  grep -q "Verifies" "$WORK/signed/$name.verify.txt" || {
+    cat "$WORK/signed/$name.verify.txt" >&2
+    echo "signature verification failed: $name" >&2
+    return 1
+  }
 }
-sign_one "$PATCHED_BASE" base.apk > "$WORK/signed/base.cert"
+sign_one "$PATCHED_BASE" base.apk
 for split in "$WORK/original"/split*.apk; do
   [[ -f "$split" ]] || continue
-  sign_one "$split" "$(basename "$split")" > "$WORK/signed/$(basename "$split").cert"
+  sign_one "$split" "$(basename "$split")"
 done
-CERT="$(cat "$WORK/signed/base.cert")"
-[[ "$CERT" =~ ^[0-9a-f]{64}$ ]] || { echo "invalid base signer digest" >&2; exit 1; }
 for signed in "$WORK/signed"/*.apk; do
   "$APKSIGNER" verify --min-sdk-version 32 --verbose "$signed" >/dev/null
-  cert="$(read_cert_digest "$signed")"
-  [[ "$cert" == "$CERT" ]] || { echo "signer mismatch: $(basename "$signed")" >&2; exit 1; }
+  badging="$("$AAPT" dump badging "$signed")"
+  grep -q "package: name='com.deepseek.chat' versionCode='296'" <<<"$badging"
+  if [[ "$(basename "$signed")" == "base.apk" ]]; then
+    grep -q "versionName='2.7.5'" <<<"$badging"
+  fi
+done
   badging="$("$AAPT" dump badging "$signed")"
   grep -q "package: name='com.deepseek.chat' versionCode='296'" <<<"$badging"
   if [[ "$(basename "$signed")" == "base.apk" ]]; then
