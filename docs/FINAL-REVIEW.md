@@ -129,6 +129,79 @@ perform. The pointers were restored for the runs `42358670810` and
 `42358670995` and removed again right after them, and the link shares of the
 files in the Drive of the owner were revoked again.
 
+## 3.1 The build of the newest official app and the proofs of this round
+
+The owner asked for four things in addition to the work that was done: the
+job has to be finished properly, the patched APK has to be built by GitHub
+Actions, the patches have to follow the rules of the Morphe community and to
+be fully functional, the login of the app has to keep working, and the app has
+to stay a native Android app. This round delivers the following.
+
+### The newest official build is supported
+
+The official download address serves DeepSeek 2.7.5 with the version code 295
+now. That build is obfuscated on its own, so the names of the seams of the
+older builds do not exist in it at all.
+
+The names were **not guessed**. `scripts/find_build_twin.py` finds the seams of
+a build by the shape of its instructions and reports the names that a
+fingerprint set has to use. The search reproduces the sets of the builds with
+the version codes 293, 294 and 296 exactly, name for name and descriptor for
+descriptor, so its result for the build 295 was trusted and written into
+`patches/src/main/kotlin/com/themuhammad/deepseekmod/patches/DeepSeekFingerprints295.kt`:
+
+| Seam | Build 295 |
+|---|---|
+| Request prompt serializer | `Loy1;->e(Laa4;Ljava/lang/Object;)V` |
+| Prompt field | `Lqy1;->c : Ljava/lang/String;` |
+| Writer of the string fields | `Ld63;->x(Lyr9; I Ljava/lang/String;)V` |
+| Streaming SET of the answer content | `Ly44;->l(Ljava/lang/String; Lh26; Liv1;)V` |
+| Streaming APPEND of the answer content | `Ly44;->m(Lh26; Ljava/lang/String;)V` |
+| Content holder of the answer | `Llea;` |
+
+### The patched APK is built by GitHub Actions
+
+The new workflow **Build the patched DeepSeek APK** downloads the file that
+the official download address serves, checks the fingerprint set of that
+build, runs the core tests, builds the bundle, applies the four patches with
+the pinned Morphe CLI and checks the result. The patched APK is uploaded as an
+artifact of the run with a lifetime of seven days. It is never committed and
+never published as a release, because the official app is not
+redistributable. The signature is a throwaway key of the build, so the app
+cannot replace an official installation in place.
+
+### The login of the app is not touched
+
+`scripts/verify_login_untouched.py` compares the DEX files of the patched APK
+with the DEX files of the original APK method by method. Only the four
+methods that the patches hook may differ, every class that the patches add has
+to belong to the extension of this project or to the Kotlin runtime that the
+patcher merges in, and no method of the login, of the session, of the token,
+of the CAPTCHA or of the anti-fraud code may change in any way. The run
+`42364324070` passed that check against the build with the version code 295.
+
+### The app stays a native Android app
+
+`scripts/verify_native_only.py` proves that no class of the extension uses the
+web kit of Android, that no class of the extension carries a JavaScript or a
+HTML payload and that the patched APK does not add a web asset to the
+original APK. The only file that the patches add to the app is
+`classes4.dex`, which holds the extension. The run `42364324070` passed that
+check as well.
+
+### The patches follow the Morphe template
+
+- every patch file carries the header of the Morphe patch template,
+- the generator of the patch list of the template was added, so the publish
+  task of the bundle can run,
+- the metadata of the bundle (`about`) names the project, the source, the
+  author, the contact, the website and the licence,
+- the extension is a `.mpe` module that is built by the `extension` block,
+- the compatibility targets are one object per version code, because the
+  patcher refuses two targets with the same version string,
+- every patch declares `compatibleWith(...)` and the hooks depend on the
+  compatibility gate.
+
 ## 4. The next blocker
 
 1. **A physical device with the official 2.7.4 and an account.** The observer has

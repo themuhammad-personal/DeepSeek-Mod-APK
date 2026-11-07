@@ -272,6 +272,14 @@ jobs:
             echo "release. The signature is a throwaway key of the build, so the app"
             echo "cannot update an official installation in place."
           } | tee -a "$GITHUB_STEP_SUMMARY" || true
+          {
+            echo "patched APK SHA-256: $(sha256sum "$RUNNER_TEMP/deepseek-build/deepseek-patched.apk" 2>/dev/null | awk '{print $1}' || echo unavailable)"
+            echo "patched APK size: $(stat -c%s "$RUNNER_TEMP/deepseek-build/deepseek-patched.apk" 2>/dev/null || echo unavailable)"
+            echo "artifact of this run: deepseek-patched-apk"
+          } | while IFS= read -r line; do
+            [[ -n "$line" ]] || continue
+            printf '::notice title=The patched APK of this run::%s\n' "${line//$'\r'/}"
+          done
 
       - name: Upload the patched APK as an artifact of this run
         if: always()
