@@ -69,7 +69,7 @@ public final class SdsRuntimeRegistry {
         if (defaultsRegistered) return;
         defaultsRegistered = true;
 
-        register("/help", "Lists the available slash commands.", new SdsSlashCommands.Expander() {
+        SdsSlashCommands.register("/help", "Lists the available slash commands.", new SdsSlashCommands.Expander() {
             @Override
             public String expand(String arguments) {
                 StringBuilder builder = new StringBuilder(
@@ -81,7 +81,7 @@ public final class SdsRuntimeRegistry {
             }
         });
 
-        register("/memory", "Adds the stored memories to the prompt.", new SdsSlashCommands.Expander() {
+        SdsSlashCommands.register("/memory", "Adds the stored memories to the prompt.", new SdsSlashCommands.Expander() {
             @Override
             public String expand(String arguments) {
                 SdsMemoryStore store = getMemoryStore();
@@ -93,7 +93,7 @@ public final class SdsRuntimeRegistry {
             }
         });
 
-        register("/projects", "Lists the native projects.", new SdsSlashCommands.Expander() {
+        SdsSlashCommands.register("/projects", "Lists the native projects.", new SdsSlashCommands.Expander() {
             @Override
             public String expand(String arguments) {
                 SdsProjectRegistry registry = getProjectRegistry();
@@ -105,7 +105,7 @@ public final class SdsRuntimeRegistry {
             }
         });
 
-        register("/files", "Lists the files of the private workspace.", new SdsSlashCommands.Expander() {
+        SdsSlashCommands.register("/files", "Lists the files of the private workspace.", new SdsSlashCommands.Expander() {
             @Override
             public String expand(String arguments) {
                 File root = getWorkspace();
