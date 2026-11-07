@@ -14,10 +14,23 @@ Three independent CI workflows are used.
    the names of that build.
 4. **Verify Morphe patches against the DeepSeek build with the version code 296** does the same
    for the newest inspected build, DeepSeek 2.7.5.
-5. **Check the newest official DeepSeek release** downloads the file that the official
+5. **Verify Morphe patches against the DeepSeek build with the version code 295** does the
+   same for the build that the official download address serves right now, DeepSeek 2.7.5 as
+   the universal APK.
+6. **Check the newest official DeepSeek release** downloads the file that the official
    download address serves right now, reports its version code and its checksum and checks
    whether the project has a fingerprint set for that build. It patches nothing and it pins
-   nothing, because that address is a moving latest-version endpoint.
+   nothing, because that address is a moving latest-version endpoint. If the project has no
+   fingerprint set for that build, the run searches for the seams of that build with the twin
+   search of `scripts/find_build_twin.py` and reports the names that a new fingerprint set
+   would need.
+7. **Build the patched DeepSeek APK** builds the patched app on every push that changes the
+   patches, the extension or a harness. It downloads the file that the official download
+   address serves, checks the fingerprint set of that build, runs the core tests, applies the
+   patches with the pinned Morphe CLI, and then checks the patched APK: the identity of the
+   app, the signature, the hook call sites, the login of the app and the native only rule.
+   The patched APK is uploaded as an artifact of the run and expires after seven days. It is
+   never committed and never published as a release, because the app is not redistributable.
 
 The detailed result of the apply verification is in **[P0-VERIFICATION.md](P0-VERIFICATION.md)**.
 
@@ -39,6 +52,21 @@ The original and patched APKs are temporary CI files and are deleted at job comp
 not uploaded as release assets and not committed. This is static/build-time integration
 evidence only. It does not prove app installation, account login, CAPTCHA/risk behaviour,
 correct callback frequency, threading, Compose rendering or real-device execution.
+
+## The login of the app may not be touched
+
+`scripts/verify_login_untouched.py` compares the DEX files of the patched APK with the DEX
+files of the original APK method by method:
+
+- only the four methods that the patches hook may differ from the original app,
+- every class that the patches add has to belong to the extension of this project or to the
+  Kotlin runtime that the patcher merges in,
+- no method of the login, of the session, of the token, of the CAPTCHA or of the anti-fraud
+  code may change in any way.
+
+`scripts/verify_native_only.py` proves that the app stays a native Android app: no class of
+the extension uses the web kit of Android, no class of the extension carries a JavaScript or a
+HTML payload, and the patched APK does not add a web asset to the original APK.
 
 ## What the verification proves
 

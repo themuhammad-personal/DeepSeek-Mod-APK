@@ -36,6 +36,43 @@ therefore has its own fingerprint set, which is described in
 this build in the run `42358670995` and every step of that run succeeded, but
 the build was not run on a device, so its target is declared as experimental.
 
+## Third inspected sample: the official download of DeepSeek 2.7.5
+
+| Field | Value |
+|---|---|
+| Application ID | com.deepseek.chat |
+| Version name | 2.7.5 |
+| Version code | 295 |
+| Minimum SDK | 24 |
+| Target SDK | 36 |
+| Distribution | the universal APK of the official download address |
+| APK SHA-256 | ddc52ef868b991fd33e634de834a3e2c022b0cd7ff9e854f4f141996aaeadb70 |
+| APK size | 22,210,268 bytes |
+
+This is the build that `https://download.deepseek.com/apk/deepseek.apk` serves right now. It
+is obfuscated on its own, so every class name of the builds with the version codes 293 and 294
+changed, and it therefore has its own fingerprint set, which is described in
+[FINGERPRINTS.md](FINGERPRINTS.md). The names were not guessed: the twin search found them by
+the shape of the instructions of the seams, and the search reproduces the sets of the other
+three builds exactly.
+
+## Fourth inspected sample: a mirrored build of DeepSeek 2.7.5
+
+| Field | Value |
+|---|---|
+| Application ID | com.deepseek.chat |
+| Version name | 2.7.5 |
+| Version code | 296 |
+| Minimum SDK | 32 |
+| Target SDK | 36 |
+| DEX files | classes.dex, classes2.dex, classes3.dex, classes4.dex |
+| Distribution | mirrored split package (XAPK) |
+| Source | the owner's own copy of the 2.7.5 XAPK |
+
+It is the same app version as the build with the version code 295, but a different build with
+its own obfuscation, so it has its own fingerprint set as well. Its target is declared as
+experimental, because the build was not run on a device.
+
 ## Statically identified method seams
 
 ### Request prompt serializer
