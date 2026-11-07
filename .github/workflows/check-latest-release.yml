@@ -93,6 +93,20 @@ jobs:
           echo "the exit code of the fingerprint verification is $status"
           exit 0
 
+      - name: Find the twin of the known seams in the newest build
+        shell: bash
+        run: |
+          set -uo pipefail
+          if [[ ! -s "$RUNNER_TEMP/deepseek-latest/deepseek.apk" ]]; then
+            echo "There is no file to check, so this run found nothing."
+            exit 0
+          fi
+          status=0
+          python3 scripts/find_build_twin.py             "$RUNNER_TEMP/deepseek-latest/deepseek.apk"             > "$RUNNER_TEMP/latest-twins.log" 2>&1 || status=$?
+          cat "$RUNNER_TEMP/latest-twins.log" || true
+          echo "the exit code of the twin search is $status"
+          exit 0
+
       - name: Write the report
         if: always()
         shell: bash
@@ -114,6 +128,7 @@ jobs:
             cat "$WORK/package.txt" 2>/dev/null || true
             grep -E "version code of the target|fingerprint set" \
               "$RUNNER_TEMP/latest-fingerprints.log" 2>/dev/null || true
+            cat "$RUNNER_TEMP/latest-twins.log" 2>/dev/null || true
           } | head -9 | while IFS= read -r line; do
             [[ -n "$line" ]] || continue
             printf '::warning title=The newest official DeepSeek release::%s\n' "${line//$'\r'/}"
