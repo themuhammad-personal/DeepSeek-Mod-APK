@@ -94,6 +94,7 @@ REQUIRED_EXTENSION_CLASSES = [
     EXTENSION_PACKAGE + "SdsExportService;",
     EXTENSION_PACKAGE + "SdsJson;",
     EXTENSION_PACKAGE + "SdsJsonWriter;",
+    EXTENSION_PACKAGE + "SdsAtomicFile;",
 ]
 
 # Type descriptors are collected from the disassembled output of the DEX files.

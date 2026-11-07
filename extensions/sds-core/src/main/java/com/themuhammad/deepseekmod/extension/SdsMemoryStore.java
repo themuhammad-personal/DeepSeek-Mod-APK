@@ -3,11 +3,8 @@ package com.themuhammad.deepseekmod.extension;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.io.OutputStreamWriter;
-import java.io.Writer;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -150,31 +147,17 @@ public final class SdsMemoryStore {
     }
 
     private void save() {
-        Writer writer = null;
+        StringBuilder content = new StringBuilder();
+        for (Map.Entry<String, String> entry : entries.entrySet()) {
+            content.append(entry.getKey());
+            content.append(TAB);
+            content.append(Base64Codec.encode(entry.getValue().getBytes(UTF8)));
+            content.append('\n');
+        }
         try {
-            File parent = file.getParentFile();
-            if (parent != null && !parent.exists()) {
-                //noinspection ResultOfMethodCallIgnored
-                parent.mkdirs();
-            }
-            writer = new OutputStreamWriter(new FileOutputStream(file), UTF8);
-            for (Map.Entry<String, String> entry : entries.entrySet()) {
-                writer.write(entry.getKey());
-                writer.write(TAB);
-                writer.write(Base64Codec.encode(entry.getValue().getBytes(UTF8)));
-                writer.write("\n");
-            }
-            writer.flush();
+            SdsAtomicFile.write(file, content.toString(), UTF8);
         } catch (IOException ignored) {
             // A store that cannot be written keeps its in-memory content.
-        } finally {
-            if (writer != null) {
-                try {
-                    writer.close();
-                } catch (IOException ignored) {
-                    // Nothing else can be done here.
-                }
-            }
         }
     }
 

@@ -41,6 +41,7 @@ public final class SdsAgentCoreSelfTest {
         testToolResultHandoff();
         testStopDoesNotPoisonTheNextTurn();
         testDiagnosticsStayBounded();
+        testStoresWriteAtomically();
         System.out.println("SDS agent-core self-test: PASS (" + checks + " checks)");
     }
 
@@ -833,6 +834,42 @@ public final class SdsAgentCoreSelfTest {
                 "an unknown command must leave the prompt untouched");
         check("plain text".equals(SdsSlashCommands.expand("plain text")),
                 "a plain prompt must stay untouched");
+    }
+
+    private static void testStoresWriteAtomically() throws Exception {
+        File parent = Files.createTempDirectory("sds-atomic-test").toFile();
+
+        File memoryFile = new File(parent, "memory.txt");
+        SdsMemoryStore memory = new SdsMemoryStore(memoryFile);
+        memory.put("language", "Bengali");
+        check(memoryFile.isFile(), "the memory file must exist");
+        check(!new File(parent, "memory.txt.sds-tmp").exists(),
+                "the temporary file of a write must not stay behind");
+        SdsMemoryStore reopenedMemory = new SdsMemoryStore(memoryFile);
+        check("Bengali".equals(reopenedMemory.get("language")),
+                "the memory must survive a restart");
+
+        File artifactFile = new File(parent, "artifacts.txt");
+        SdsArtifactStore artifacts = new SdsArtifactStore(artifactFile);
+        String first = artifacts.create("one", "text", "a").getId();
+        String second = artifacts.create("two", "text", "b").getId();
+        String third = artifacts.create("three", "text", "c").getId();
+        check(!first.equals(second) && !second.equals(third) && !first.equals(third),
+                "two artifacts must not share an identifier");
+        check(!new File(parent, "artifacts.txt.sds-tmp").exists(),
+                "the temporary file of a write must not stay behind");
+        SdsArtifactStore reopenedArtifacts = new SdsArtifactStore(artifactFile);
+        check(reopenedArtifacts.size() == 3, "the artifacts must survive a restart");
+
+        File projectFile = new File(parent, "projects.txt");
+        SdsProjectRegistry projects = new SdsProjectRegistry(projectFile);
+        projects.create("Report");
+        check(!new File(parent, "projects.txt.sds-tmp").exists(),
+                "the temporary file of a write must not stay behind");
+        check(new SdsProjectRegistry(projectFile).size() == 1,
+                "the projects must survive a restart");
+
+        deleteTree(parent);
     }
 
     private static void testPromptExpansion() throws Exception {

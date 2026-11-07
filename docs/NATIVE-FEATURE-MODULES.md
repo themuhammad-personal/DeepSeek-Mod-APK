@@ -144,7 +144,7 @@ command and the untouched plain prompt are covered.
 | Native implementation | `SdsMemoryStore`, the memory card and the switch in `SdsAgentConsoleActivity` |
 | Status | `static-verified`, `build-verified` |
 
-**Why.** A memory is a short note the user keeps for the assistant. It is
+**Why.** A memory is a short note the user keeps for the assistant. The file is written through a temporary file that then takes its place, so a crash cannot leave a half written file behind. It is
 stored in the app-private directory, so it is removed with the app and it is
 not reachable by another app.
 

@@ -3,11 +3,8 @@ package com.themuhammad.deepseekmod.extension;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.io.OutputStreamWriter;
-import java.io.Writer;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -37,6 +34,7 @@ public final class SdsArtifactStore {
 
     private final File file;
     private final Map<String, Artifact> artifacts = new LinkedHashMap<>();
+    private long nextId = 1;
 
     public SdsArtifactStore(File file) {
         if (file == null) throw new IllegalArgumentException("file is required");
@@ -55,7 +53,10 @@ public final class SdsArtifactStore {
         if (artifacts.size() >= MAX_ARTIFACTS) {
             throw new IllegalStateException("the artifact limit is reached");
         }
-        String id = "a-" + System.currentTimeMillis() + "-" + (artifacts.size() + 1);
+        // The counter keeps the identifier unique even when two artifacts are
+        // created inside the same millisecond.
+        String id = "a-" + System.currentTimeMillis() + "-" + nextId++;
+        if (nextId > MAX_ARTIFACTS + 1) nextId = artifacts.size() + 1;
         Artifact artifact = new Artifact(id, normalizedTitle, normalizedLanguage, normalizedContent,
                 System.currentTimeMillis());
         artifacts.put(id, artifact);
@@ -151,6 +152,7 @@ public final class SdsArtifactStore {
                 } catch (IllegalArgumentException ignored) {
                     // A damaged record is skipped instead of failing the whole store.
                 }
+                nextId = artifacts.size() + 1;
             }
         } catch (IOException ignored) {
             // A store that cannot be read starts empty.
@@ -166,37 +168,23 @@ public final class SdsArtifactStore {
     }
 
     private void save() {
-        Writer writer = null;
+        StringBuilder content = new StringBuilder();
+        for (Artifact artifact : artifacts.values()) {
+            content.append(artifact.getId());
+            content.append(TAB);
+            content.append(SdsMemoryStore.Base64Codec.encode(artifact.getTitle().getBytes(UTF8)));
+            content.append(TAB);
+            content.append(SdsMemoryStore.Base64Codec.encode(artifact.getLanguage().getBytes(UTF8)));
+            content.append(TAB);
+            content.append(SdsMemoryStore.Base64Codec.encode(artifact.getContent().getBytes(UTF8)));
+            content.append(TAB);
+            content.append(Long.toString(artifact.getCreatedAt()));
+            content.append('\n');
+        }
         try {
-            File parent = file.getParentFile();
-            if (parent != null && !parent.exists()) {
-                //noinspection ResultOfMethodCallIgnored
-                parent.mkdirs();
-            }
-            writer = new OutputStreamWriter(new FileOutputStream(file), UTF8);
-            for (Artifact artifact : artifacts.values()) {
-                writer.write(artifact.getId());
-                writer.write(TAB);
-                writer.write(SdsMemoryStore.Base64Codec.encode(artifact.getTitle().getBytes(UTF8)));
-                writer.write(TAB);
-                writer.write(SdsMemoryStore.Base64Codec.encode(artifact.getLanguage().getBytes(UTF8)));
-                writer.write(TAB);
-                writer.write(SdsMemoryStore.Base64Codec.encode(artifact.getContent().getBytes(UTF8)));
-                writer.write(TAB);
-                writer.write(Long.toString(artifact.getCreatedAt()));
-                writer.write("\n");
-            }
-            writer.flush();
+            SdsAtomicFile.write(file, content.toString(), UTF8);
         } catch (IOException ignored) {
             // A store that cannot be written keeps its in-memory content.
-        } finally {
-            if (writer != null) {
-                try {
-                    writer.close();
-                } catch (IOException ignored) {
-                    // Nothing else can be done here.
-                }
-            }
         }
     }
 
