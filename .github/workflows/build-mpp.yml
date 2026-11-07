@@ -39,9 +39,9 @@ jobs:
       - name: Build Morphe patches and DEX extension
         shell: bash
         run: |
-          set -o pipefail
-          gradle --no-daemon buildAndroid 2>&1 | tee "$RUNNER_TEMP/gradle-build.log"
-          status=${PIPESTATUS[0]}
+          status=0
+          gradle --no-daemon buildAndroid > "$RUNNER_TEMP/gradle-build.log" 2>&1 || status=$?
+          cat "$RUNNER_TEMP/gradle-build.log"
           if [[ "$status" -ne 0 ]]; then
             # Surface the compiler or D8 error as a workflow annotation so that the
             # failure is readable without downloading the full run log.
