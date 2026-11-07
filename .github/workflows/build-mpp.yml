@@ -5,6 +5,7 @@ on:
     branches:
       - "work/**"
       - "arena/**"
+      - "final/**"
       - "dev"
   pull_request:
     branches:
