@@ -13,7 +13,7 @@ package com.themuhammad.deepseekmod.extension;
  */
 public final class SdsSandboxConfig {
     public static final String ROOTFS_URL =
-            "https://cdimage.ubuntu.com/ubuntu-base/releases/24.04/release/ubuntu-base-24.04.5-base-arm64.tar.gz";
+            "https://cdimage.ubuntu.com/ubuntu-base/releases/noble/release/ubuntu-base-24.04.5-base-arm64.tar.gz";
     public static final String ROOTFS_SHA256 =
             "a91d5a93010193712d346d761372b7c9db6dfcf093893161c64ca107f05914f2";
     public static final String ROOTFS_VERSION = "Ubuntu Base 24.04.5 LTS arm64";

@@ -5,7 +5,6 @@ import java.io.File;
 import java.io.InputStreamReader;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
 
 /**
  * The Linux Studio command tool.
@@ -99,6 +98,11 @@ public final class SdsSandboxTool {
                         "-r", rootfs.getAbsolutePath(),
                         "-0",
                         "--link2symlink",
+                        // The device nodes and the process list of the app are
+                        // bound into the guest, the same way the reference proof of
+                        // concept did it.
+                        "-b", "/dev",
+                        "-b", "/proc",
                         "-w", "/root",
                         "/bin/sh", "-c", command);
                 builder.redirectErrorStream(true);
@@ -152,18 +156,51 @@ public final class SdsSandboxTool {
                 reader.setDaemon(true);
                 reader.start();
 
-                int exitCode = -1;
+                // The wait for the process runs in its own thread, because the
+                // timed variant of waitFor needs a newer platform than the app
+                // supports and because the stop of the user has to be noticed
+                // while the command is running.
+                final Process running = process;
+                final int[] exitCode = new int[]{-1};
+                final boolean[] finished = new boolean[]{false};
+                Thread waiter = new Thread(new Runnable() {
+                    @Override
+                    public void run() {
+                        try {
+                            exitCode[0] = running.waitFor();
+                        } catch (InterruptedException ignored) {
+                            // The thread is a daemon, so the end of the program
+                            // ends it as well.
+                        } finally {
+                            finished[0] = true;
+                        }
+                    }
+                }, "sds-sandbox-wait");
+                waiter.setDaemon(true);
+                waiter.start();
+
                 if (context.isCancelled()) {
-                    process.destroyForcibly();
+                    terminate(running, waiter);
                     return new SdsToolResult(SdsToolResult.Status.CANCELLED, snapshot(output),
                             "the command was stopped");
                 }
-                if (!process.waitFor(timeoutSeconds, TimeUnit.SECONDS)) {
-                    process.destroyForcibly();
-                    return new SdsToolResult(SdsToolResult.Status.TIMED_OUT, snapshot(output),
-                            "the command did not finish in time");
+                long deadline = System.currentTimeMillis() + timeoutSeconds * 1000L;
+                boolean done = false;
+                while (!done) {
+                    waiter.join(200L);
+                    done = finished[0];
+                    if (done) break;
+                    if (context.isCancelled()) {
+                        terminate(running, waiter);
+                        return new SdsToolResult(SdsToolResult.Status.CANCELLED, snapshot(output),
+                                "the command was stopped");
+                    }
+                    if (System.currentTimeMillis() >= deadline) {
+                        terminate(running, waiter);
+                        return new SdsToolResult(SdsToolResult.Status.TIMED_OUT, snapshot(output),
+                                "the command did not finish in time");
+                    }
                 }
-                exitCode = process.exitValue();
                 // The reader needs a moment to drain what is left in the pipe.
                 reader.join(500);
                 String text = snapshot(output);
@@ -171,7 +208,7 @@ public final class SdsSandboxTool {
                     text = text + "[output truncated]\n";
                 }
                 return new SdsToolResult(SdsToolResult.Status.SUCCESS, text,
-                        exitCode == 0 ? "" : "the command exited with " + exitCode);
+                        exitCode[0] == 0 ? "" : "the command exited with " + exitCode[0]);
             } catch (IllegalArgumentException refused) {
                 return new SdsToolResult(SdsToolResult.Status.FAILED, "",
                         "the arguments did not match the schema");
@@ -179,6 +216,33 @@ public final class SdsSandboxTool {
                 return new SdsToolResult(SdsToolResult.Status.FAILED, "",
                         "the Linux Studio could not be started");
             }
+        }
+    }
+
+    /**
+     * Stops a command.
+     *
+     * The soft stop is used first. The hard stop needs a newer platform than
+     * the app supports, so it is only tried when the platform has it and the
+     * failure is ignored when it has not.
+     */
+    private static void terminate(Process process, Thread waiter) {
+        try {
+            process.destroy();
+        } catch (Throwable ignored) {
+            // The process is gone already.
+        }
+        try {
+            waiter.join(500L);
+        } catch (InterruptedException ignored) {
+            // The thread is a daemon.
+        }
+        try {
+            if (waiter.isAlive()) {
+                process.destroyForcibly();
+            }
+        } catch (Throwable ignored) {
+            // The platform does not know the hard stop, the soft stop was enough.
         }
     }
 
