@@ -317,6 +317,51 @@ jobs:
           fi
           exit "$status"
 
+      - name: Verify that the login of the app was not touched
+        if: steps.source.outputs.has_source == 'true'
+        shell: bash
+        run: |
+          set -uo pipefail
+          status=0
+          python3 scripts/verify_login_untouched.py \
+            "$RUNNER_TEMP/deepseek-296/deepseek-296-patched.apk" \
+            "$RUNNER_TEMP/deepseek-296/base.apk" \
+            > "$RUNNER_TEMP/login-verification-296.log" 2>&1 || status=$?
+          cat "$RUNNER_TEMP/login-verification-296.log"
+          if [[ "$status" -ne 0 ]]; then
+            grep -E "FAILED" "$RUNNER_TEMP/login-verification-296.log" | head -4 | while IFS= read -r line; do
+              printf '::error title=The login must not be touched::%s\n' "${line//$'\r'/}"
+            done
+          fi
+          exit "$status"
+
+      - name: Verify that the app stays a native Android app
+        if: steps.source.outputs.has_source == 'true'
+        shell: bash
+        run: |
+          set -uo pipefail
+          status=0
+          python3 scripts/verify_native_only.py \
+            "$RUNNER_TEMP/deepseek-296/deepseek-296-patched.apk" \
+            "$RUNNER_TEMP/deepseek-296/base.apk" \
+            > "$RUNNER_TEMP/native-verification-296.log" 2>&1 || status=$?
+          cat "$RUNNER_TEMP/native-verification-296.log"
+          if [[ "$status" -ne 0 ]]; then
+            grep -E "FAILED" "$RUNNER_TEMP/native-verification-296.log" | head -4 | while IFS= read -r line; do
+              printf '::error title=The app has to stay native::%s\n' "${line//$'\r'/}"
+            done
+          fi
+          exit "$status"
+
+      - name: Upload the patched APK of the build with the version code 296
+        if: steps.source.outputs.has_source == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: deepseek-patched-apk-296
+          path: ${{ runner.temp }}/deepseek-296/deepseek-296-patched.apk
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Write the verification report
         if: always()
         shell: bash
