@@ -786,7 +786,7 @@ public final class SdsAgentConsoleActivity extends Activity {
         final Thread worker = new Thread(new Runnable() {
             @Override
             public void run() {
-                final String text;
+                String text;
                 try {
                     SdsHttpFetcher.Response response =
                             SdsHttpFetcher.fetch(url, SdsHttpFetcher.MAX_BODY_BYTES);
@@ -799,7 +799,7 @@ public final class SdsAgentConsoleActivity extends Activity {
                 } catch (Exception refused) {
                     text = "the address could not be reached";
                 }
-                final String result = text;
+                final String result = text == null ? "" : text;
                 runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
