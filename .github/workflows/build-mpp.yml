@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - "work/**"
+      - "arena/**"
       - "dev"
   pull_request:
     branches:
