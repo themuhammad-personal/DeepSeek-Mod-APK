@@ -17,6 +17,9 @@
 #   --mpp <file>          the Morphe bundle to apply. Without it the script
 #                          builds the bundle with gradle, which needs access to
 #                          the Morphe package registry.
+#   --source-file <file>  the pinned extraction bundle that is already on this
+#                          machine. Use it when the file lives in a Drive that
+#                          is not shared with the internet.
 #   --source-url <url>    the address of the pinned extraction bundle.
 #   --source-sha256 <sh>  the checksum of that bundle.
 #   --out <directory>     where the result is written. Default: build-local.
@@ -28,6 +31,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WORK="$ROOT/build-local"
 MPP=""
+SOURCE_FILE=""
 SOURCE_URL="${SDS_SOURCE_URL:-https://drive.usercontent.google.com/download?id=1zKivuIhspDNuEpI74Q0QLtAP7ZtDfMM0&export=download&confirm=t}"
 SOURCE_SHA256="${SDS_SOURCE_SHA256:-b0ec418ec9b8a273479acd8fed73acefbdbddd34162684c50e1737abb70d74de}"
 OUT="$WORK"
@@ -38,6 +42,7 @@ MORPHE_CLI_SHA256="3a2efefd567b44dde15971a58d5aa649a32aba30781d3400dc08d688c7201
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --mpp) MPP="$2"; shift 2 ;;
+    --source-file) SOURCE_FILE="$2"; shift 2 ;;
     --source-url) SOURCE_URL="$2"; shift 2 ;;
     --source-sha256) SOURCE_SHA256="$2"; shift 2 ;;
     --out) OUT="$2"; shift 2 ;;
@@ -85,6 +90,10 @@ fi
 
 # 3. The pinned extraction of the official app.
 say "the pinned extraction of the official app"
+if [[ -n "$SOURCE_FILE" ]]; then
+  [[ -f "$SOURCE_FILE" ]] || die "the file $SOURCE_FILE does not exist"
+  cp -f "$SOURCE_FILE" "$WORK/pinned-extraction.zip"
+fi
 if [[ ! -f "$WORK/pinned-extraction.zip" ]]; then
   [[ "$SOURCE_URL" == https://* ]] || die "the source address must use https"
   curl --proto '=https' --tlsv1.2 --fail --location --retry 3 --max-time 900 \
