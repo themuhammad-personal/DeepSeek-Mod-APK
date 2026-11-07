@@ -23,7 +23,7 @@
 - `SdsToolRegistry`: the allow-list. A tool has to be registered explicitly before it can run. There is no dynamic lookup by class name, no reflection and no command execution, so a model cannot reach anything the app did not put into the registry.
 - `SdsTool`: the tool contract. Every tool declares its name, its description, its exact argument schema, whether it only reads, and whether it needs the network.
 - `SdsToolArguments`: a strict reader for **flat** JSON only. Nested objects and arrays are rejected, and `requireOnly` refuses every argument the tool does not declare.
-- `SdsToolExecutor`: the only place a tool runs. It refuses an unregistered tool, refuses a network tool while the network policy forbids it, refuses to run without an explicit approval, bounds the output, and interrupts a tool that exceeds the timeout.
+- `SdsToolExecutor`: the only place a tool runs. It refuses an unregistered tool, refuses a network tool while the network policy forbids it, refuses to run without an explicit approval, bounds the output, and interrupts a tool that exceeds the timeout. The tools run in a pool and not in a single thread, so a tool that ignores the interrupt cannot block the next approved run, and the output of a tool is bounded again with the policy of the executor.
 - `SdsWorkspaceTools`: `workspace.list`, `workspace.read` and `workspace.write`. They only touch the app-private workspace, they never run a command, they never use the network and every path goes through `SdsWorkspaceGuard`. A refused path or a mismatching argument becomes a failed result with a reason, not an exception.
 
 ### Feature modules (build-verified, not device-runtime-verified)
@@ -134,7 +134,7 @@ See docs/DEEPSEEK-STREAM-TRACE.md for the obfuscated classes, methods and eviden
 
 - The two experimental patches stay `default = false`, so a build without them is the untouched official app behaviour.
 - Proposal mode is off by default and session-only, so the hooks never change a prompt until the user turns it on.
-- The allow-list starts empty in the shipped runtime and is only populated with the workspace tools, so removing the registry population removes every executable tool without touching the UI.
+- The allow-list is built by the console from the registered tools only. The workspace, the artifact and the Generative UI tools are always there, the sandbox command only while its switch is on, and the tools of an MCP server only while that server is on, so removing the population removes every executable tool without touching the UI.
 - The registry refuses a duplicate name, so a tool cannot be replaced at runtime.
 - The chat entry is a separate patch, so the console can be reached from the
   launcher alone.
