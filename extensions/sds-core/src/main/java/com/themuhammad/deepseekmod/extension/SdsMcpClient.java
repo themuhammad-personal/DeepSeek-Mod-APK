@@ -97,11 +97,18 @@ public final class SdsMcpClient {
 
         HttpURLConnection connection = null;
         try {
-            URL url = new URL(server.getUrl());
+            String address = server.getUrl();
+            if (address == null || !address.trim().toLowerCase(java.util.Locale.US).startsWith("https://")) {
+                throw new IOException("the server address has to use https");
+            }
+            URL url = new URL(address);
             connection = (HttpURLConnection) url.openConnection();
             connection.setRequestMethod("POST");
             connection.setConnectTimeout(CONNECT_TIMEOUT_MS);
             connection.setReadTimeout(READ_TIMEOUT_MS);
+            // A redirect is never followed: the token of the server must not reach
+            // another host, and the answer of a redirect is not a JSON-RPC answer.
+            connection.setInstanceFollowRedirects(false);
             connection.setDoOutput(true);
             connection.setRequestProperty("Content-Type", "application/json");
             connection.setRequestProperty("Accept", "application/json");
@@ -123,6 +130,9 @@ public final class SdsMcpClient {
             }
 
             int status = connection.getResponseCode();
+            if (status >= 300 && status < 400) {
+                throw new IOException("the server answered with a redirect");
+            }
             InputStream stream = status >= 400 ? connection.getErrorStream() : connection.getInputStream();
             String body = readBounded(stream);
             if (status >= 400) {
