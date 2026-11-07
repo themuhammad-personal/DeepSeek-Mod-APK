@@ -49,6 +49,10 @@ public final class SdsAgentConsoleActivity extends Activity {
     private LinearLayout commandList;
     private LinearLayout artifactList;
     private LinearLayout uiSurface;
+    private TextView studioStatus;
+    private TextView studioOutput;
+    private Switch sandboxSwitch;
+    private EditText studioInput;
     private TextView queueStatus;
     private TextView sessionStatus;
     private TextView diagnosticsStatus;
@@ -65,13 +69,7 @@ public final class SdsAgentConsoleActivity extends Activity {
         //noinspection ResultOfMethodCallIgnored
         workspace.mkdirs();
         SdsAppContext.initialize(getApplicationContext());
-        registry = SdsWorkspaceTools.createRegistry();
-        for (SdsTool tool : SdsArtifactTools.createRegistry().all()) {
-            registry.register(tool);
-        }
-        for (SdsTool tool : SdsUiTools.createRegistry().all()) {
-            registry.register(tool);
-        }
+        registry = buildToolRegistry();
         executor = new SdsToolExecutor(registry, SdsExecutionPolicy.SAFE_DEFAULT);
         buildScreen();
         proposalMode.setChecked(SdsAgentHooks.isEnabled());
@@ -250,6 +248,59 @@ public final class SdsAgentConsoleActivity extends Activity {
         addGap(root, 12);
         root.addView(projectCard, matchWrap());
 
+        LinearLayout studioCard = card();
+        studioCard.addView(text("Linux Studio", 16, TEXT, true), matchWrap());
+        TextView studioNote = text(
+                "A PRoot runtime with an Ubuntu base filesystem. PRoot translates the paths "
+                        + "in user space, it is not a kernel sandbox, so every command needs "
+                        + "your explicit approval.",
+                11, MUTED, false);
+        LinearLayout.LayoutParams studioNoteParams = matchWrap();
+        studioNoteParams.topMargin = dp(4);
+        studioCard.addView(studioNote, studioNoteParams);
+        studioStatus = text("The state of the runtime is unknown.", 12, Color.rgb(203, 215, 232), false);
+        LinearLayout.LayoutParams studioStatusParams = matchWrap();
+        studioStatusParams.topMargin = dp(6);
+        studioCard.addView(studioStatus, studioStatusParams);
+        sandboxSwitch = new Switch(this);
+        sandboxSwitch.setText("Offer the sandbox command to the agent");
+        sandboxSwitch.setTextColor(TEXT);
+        sandboxSwitch.setTextSize(13);
+        sandboxSwitch.setChecked(SdsRuntimeRegistry.isSandboxEnabled());
+        sandboxSwitch.setOnCheckedChangeListener((button, checked) -> {
+            SdsRuntimeRegistry.setSandboxEnabled(checked);
+            registry = buildToolRegistry();
+            refreshTools();
+        });
+        LinearLayout.LayoutParams sandboxSwitchParams = matchWrap();
+        sandboxSwitchParams.topMargin = dp(6);
+        studioCard.addView(sandboxSwitch, sandboxSwitchParams);
+        studioInput = new EditText(this);
+        studioInput.setHint("command, for example uname -a");
+        studioInput.setTextColor(TEXT);
+        studioInput.setHintTextColor(MUTED);
+        studioInput.setTextSize(13);
+        LinearLayout.LayoutParams studioInputParams = matchWrap();
+        studioInputParams.topMargin = dp(6);
+        studioCard.addView(studioInput, studioInputParams);
+        Button runCommand = button("Run the command after an approval");
+        runCommand.setOnClickListener(v -> onRunSandboxCommand());
+        LinearLayout.LayoutParams runCommandParams = wrapWrap();
+        runCommandParams.topMargin = dp(6);
+        studioCard.addView(runCommand, runCommandParams);
+        studioOutput = new TextView(this);
+        studioOutput.setTextColor(Color.rgb(180, 210, 255));
+        studioOutput.setTextSize(12);
+        studioOutput.setTypeface(Typeface.MONOSPACE);
+        studioOutput.setBackgroundColor(Color.rgb(18, 24, 34));
+        studioOutput.setPadding(dp(8), dp(8), dp(8), dp(8));
+        studioOutput.setVisibility(View.GONE);
+        LinearLayout.LayoutParams studioOutputParams = matchWrap();
+        studioOutputParams.topMargin = dp(6);
+        studioCard.addView(studioOutput, studioOutputParams);
+        addGap(root, 12);
+        root.addView(studioCard, matchWrap());
+
         LinearLayout uiCard = card();
         uiCard.addView(text("Generative UI", 16, TEXT, true), matchWrap());
         TextView uiNote = text(
@@ -350,6 +401,28 @@ public final class SdsAgentConsoleActivity extends Activity {
         setContentView(root);
     }
 
+    /**
+     * Builds the allow-list of the console.
+     *
+     * The sandbox command is only on the list when the user turned it on, so
+     * the model cannot reach it while the switch is off.
+     */
+    private SdsToolRegistry buildToolRegistry() {
+        SdsToolRegistry built = SdsWorkspaceTools.createRegistry();
+        for (SdsTool tool : SdsArtifactTools.createRegistry().all()) {
+            built.register(tool);
+        }
+        for (SdsTool tool : SdsUiTools.createRegistry().all()) {
+            built.register(tool);
+        }
+        if (SdsRuntimeRegistry.isSandboxEnabled()) {
+            for (SdsTool tool : SdsSandboxTool.createRegistry().all()) {
+                built.register(tool);
+            }
+        }
+        return built;
+    }
+
     private void refresh() {
         refreshProposals();
         refreshSession();
@@ -361,6 +434,7 @@ public final class SdsAgentConsoleActivity extends Activity {
         refreshCommands();
         refreshArtifacts();
         refreshGenerativeUi();
+        refreshSandbox();
     }
 
     private void onAddMemory() {
@@ -454,6 +528,103 @@ public final class SdsAgentConsoleActivity extends Activity {
             rowParams.topMargin = dp(4);
             projectList.addView(row, rowParams);
         }
+    }
+
+    private void refreshSandbox() {
+        if (studioStatus == null) return;
+        SdsSandboxManager manager = SdsRuntimeRegistry.getSandboxManager();
+        if (manager == null) {
+            studioStatus.setText("The Linux Studio was not prepared in this build.");
+            return;
+        }
+        studioStatus.setText(manager.describe());
+    }
+
+    private void onRunSandboxCommand() {
+        final String command = studioInput == null ? "" : studioInput.getText().toString().trim();
+        if (command.isEmpty()) {
+            Toast.makeText(this, "The command is required", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        final SdsSandboxManager manager = SdsRuntimeRegistry.getSandboxManager();
+        if (manager == null || !manager.isReady()) {
+            Toast.makeText(this, "The Linux Studio is not ready", Toast.LENGTH_SHORT).show();
+            refreshSandbox();
+            return;
+        }
+        // The approval is explicit and it shows the exact command.
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("Run this command in the Linux Studio?")
+                .setMessage(command)
+                .setNegativeButton(android.content.DialogInterface.BUTTON_NEGATIVE, null)
+                .setPositiveButton(android.content.DialogInterface.BUTTON_POSITIVE,
+                        (dialog, which) -> runSandboxCommandInBackground(command))
+                .show();
+    }
+
+    private void runSandboxCommandInBackground(final String command) {
+        if (studioOutput != null) {
+            studioOutput.setVisibility(View.VISIBLE);
+            studioOutput.setText("running...");
+        }
+        final Thread worker = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                final SdsToolResult result = executeSandboxCommand(command);
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        if (studioOutput == null) return;
+                        String output = result.getOutput();
+                        String error = result.getSafeError();
+                        StringBuilder builder = new StringBuilder();
+                        if (output != null && !output.isEmpty()) builder.append(output);
+                        if (error != null && !error.isEmpty()) builder.append(error);
+                        studioOutput.setText(builder.length() == 0 ? "no output" : builder.toString());
+                    }
+                });
+            }
+        }, "sds-studio");
+        worker.start();
+    }
+
+    private SdsToolResult executeSandboxCommand(String command) {
+        SdsToolRegistry sandboxRegistry = SdsSandboxTool.createRegistry();
+        SdsTool tool = sandboxRegistry.find(SdsSandboxTool.RUN);
+        if (tool == null) {
+            return new SdsToolResult(SdsToolResult.Status.FAILED, "", "the sandbox tool is missing");
+        }
+        File workspace = SdsRuntimeRegistry.getWorkspace();
+        if (workspace == null) {
+            workspace = new File(getFilesDir(), "workspace");
+        }
+        SdsToolContext context = new SdsToolContext(workspace, SdsExecutionPolicy.SAFE_DEFAULT,
+                new SdsCancellation());
+        try {
+            return tool.execute(context, new SdsToolCall("console-" + System.currentTimeMillis(),
+                    SdsSandboxTool.RUN, "{\"command\":\"" + escapeJson(command) + "\"}"));
+        } catch (Exception failed) {
+            return new SdsToolResult(SdsToolResult.Status.FAILED, "", "the command could not be run");
+        }
+    }
+
+    private static String escapeJson(String value) {
+        StringBuilder builder = new StringBuilder();
+        for (int index = 0; index < value.length(); index++) {
+            char c = value.charAt(index);
+            if (c == '"' || c == '\\') {
+                builder.append('\\').append(c);
+            } else if (c == '\n') {
+                builder.append("\\n");
+            } else if (c == '\r') {
+                builder.append("\\r");
+            } else if (c == '\t') {
+                builder.append("\\t");
+            } else {
+                builder.append(c);
+            }
+        }
+        return builder.toString();
     }
 
     private void refreshGenerativeUi() {

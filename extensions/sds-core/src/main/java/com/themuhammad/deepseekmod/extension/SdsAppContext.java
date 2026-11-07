@@ -40,6 +40,13 @@ public final class SdsAppContext {
             SdsRuntimeRegistry.setMemoryStore(new SdsMemoryStore(new File(files, MEMORY_FILE)));
             SdsRuntimeRegistry.setProjectRegistry(new SdsProjectRegistry(new File(files, PROJECT_FILE)));
             SdsRuntimeRegistry.setArtifactStore(new SdsArtifactStore(new File(files, ARTIFACT_FILE)));
+            File nativeLibraryDirectory = null;
+            try {
+                nativeLibraryDirectory = target.getApplicationInfo().nativeLibraryDir;
+            } catch (Throwable ignored) {
+                // The runtime stays unavailable when the path is unknown.
+            }
+            SdsRuntimeRegistry.setSandboxManager(new SdsSandboxManager(nativeLibraryDirectory, files));
             SdsRuntimeRegistry.ensureDefaults();
         } catch (Throwable ignored) {
             // A feature that cannot prepare itself stays inactive.

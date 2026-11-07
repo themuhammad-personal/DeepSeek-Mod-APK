@@ -32,6 +32,7 @@ public final class SdsAgentCoreSelfTest {
         testArtifactStore();
         testArtifactTools();
         testGenerativeUi();
+        testLinuxStudio();
         System.out.println("SDS agent-core self-test: PASS (" + checks + " checks)");
     }
 
@@ -369,9 +370,77 @@ public final class SdsAgentCoreSelfTest {
         deleteTree(parent);
     }
 
+    private static void writeFile(File file, String content) throws Exception {
+        java.io.FileWriter writer = new java.io.FileWriter(file);
+        try {
+            writer.write(content);
+        } finally {
+            writer.close();
+        }
+    }
+
     private static void check(boolean condition, String message) {
         checks++;
         if (!condition) throw new AssertionError(message);
+    }
+
+    private static void testLinuxStudio() throws Exception {
+        File parent = Files.createTempDirectory("sds-studio-test").toFile();
+        File nativeLibraryDirectory = new File(parent, "lib");
+        check(nativeLibraryDirectory.mkdirs(), "native library directory create failed");
+        File filesDirectory = new File(parent, "files");
+        check(filesDirectory.mkdirs(), "files directory create failed");
+
+        SdsSandboxManager manager = new SdsSandboxManager(nativeLibraryDirectory, filesDirectory);
+        check(!manager.isRuntimeAvailable(), "a runtime that is not bundled must not be available");
+        check(!manager.isRootfsReady(), "a root filesystem that is not there must not be ready");
+        check(!manager.isReady(), "the studio must not be ready without a runtime");
+        check(manager.describe().contains("not bundled"), "the state must be described");
+        check(SdsSandboxConfig.ROOTFS_SHA256.length() == 64, "the root filesystem must be pinned");
+
+        // A launcher that is present makes the runtime available, but the root
+        // filesystem still has to be unpacked and verified.
+        File launcher = new File(nativeLibraryDirectory, "libproroot.so");
+        writeFile(launcher, "#!/bin/sh\n");
+        launcher.setExecutable(true);
+        SdsSandboxManager withLauncher = new SdsSandboxManager(nativeLibraryDirectory, filesDirectory);
+        check(withLauncher.isRuntimeAvailable(), "the bundled runtime must be found");
+        check(!withLauncher.isRootfsReady(), "the root filesystem must still be missing");
+
+        File rootfs = withLauncher.getRootfsDirectory();
+        check(rootfs.mkdirs(), "rootfs directory create failed");
+        writeFile(new File(rootfs, SdsSandboxConfig.ROOTFS_MARKER),
+                SdsSandboxConfig.ROOTFS_SHA256 + "\n");
+        SdsSandboxManager ready = new SdsSandboxManager(nativeLibraryDirectory, filesDirectory);
+        check(ready.isRootfsReady(), "the verified root filesystem must be ready");
+        check(ready.isReady(), "the studio must be ready");
+
+        // A root filesystem with a wrong checksum must not be accepted.
+        writeFile(new File(rootfs, SdsSandboxConfig.ROOTFS_MARKER), "0".repeat(64) + "\n");
+        SdsSandboxManager wrong = new SdsSandboxManager(nativeLibraryDirectory, filesDirectory);
+        check(!wrong.isRootfsReady(), "a wrong checksum must be refused");
+
+        // The tool refuses to run without the runtime.
+        SdsRuntimeRegistry.setSandboxManager(wrong);
+        SdsToolRegistry registry = SdsSandboxTool.createRegistry();
+        check(registry.contains(SdsSandboxTool.RUN), "the sandbox tool must be registered");
+        SdsTool tool = registry.find(SdsSandboxTool.RUN);
+        check(!tool.isReadOnly(), "the sandbox tool must not be read-only");
+        check(!tool.requiresNetwork(), "the sandbox tool must not need the network");
+        File workspace = new File(parent, "workspace");
+        check(workspace.mkdirs(), "workspace create failed");
+        SdsToolContext context = new SdsToolContext(workspace, SdsExecutionPolicy.SAFE_DEFAULT,
+                new SdsCancellation());
+        SdsToolResult refused = tool.execute(context,
+                new SdsToolCall("call-1", SdsSandboxTool.RUN, "{\"command\":\"uname -a\"}"));
+        check(refused.getStatus() == SdsToolResult.Status.FAILED, "a missing runtime must be refused");
+
+        SdsToolResult badArguments = tool.execute(context,
+                new SdsToolCall("call-2", SdsSandboxTool.RUN, "{\"command\":\"uname -a\",\"x\":1}"));
+        check(badArguments.getStatus() == SdsToolResult.Status.FAILED,
+                "an unknown argument must be refused");
+        SdsRuntimeRegistry.setSandboxManager(null);
+        deleteTree(parent);
     }
 
     private static void testGenerativeUi() throws Exception {

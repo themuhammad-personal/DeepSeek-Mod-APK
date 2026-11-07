@@ -22,6 +22,8 @@ public final class SdsRuntimeRegistry {
     private static volatile SdsProjectRegistry projectRegistry;
     private static volatile SdsArtifactStore artifactStore;
     private static volatile SdsUiSpec lastUiSpec;
+    private static volatile SdsSandboxManager sandboxManager;
+    private static volatile boolean sandboxEnabled;
     private static volatile boolean includeMemoryInPrompt;
     private static volatile boolean defaultsRegistered;
 
@@ -50,6 +52,24 @@ public final class SdsRuntimeRegistry {
 
     public static void setProjectRegistry(SdsProjectRegistry value) {
         projectRegistry = value;
+    }
+
+    /** The Linux Studio runtime, or null when it was never prepared. */
+    public static SdsSandboxManager getSandboxManager() {
+        return sandboxManager;
+    }
+
+    public static void setSandboxManager(SdsSandboxManager value) {
+        sandboxManager = value;
+    }
+
+    /** True when the Linux Studio command tool is offered to the agent. Off by default. */
+    public static boolean isSandboxEnabled() {
+        return sandboxEnabled;
+    }
+
+    public static void setSandboxEnabled(boolean value) {
+        sandboxEnabled = value;
     }
 
     /** The interface the assistant asked for last, or null. */
