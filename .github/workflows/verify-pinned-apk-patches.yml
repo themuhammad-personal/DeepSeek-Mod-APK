@@ -36,6 +36,11 @@ on:
       - "arena/**"
     paths:
       - ".github/pinned-source.env"
+      - ".github/workflows/verify-pinned-apk-patches.yml"
+      - "scripts/rebuild-pinned-apk.py"
+      - "scripts/verify_patched_hooks.py"
+      - "patches/**"
+      - "extensions/**"
 
 permissions:
   contents: read
