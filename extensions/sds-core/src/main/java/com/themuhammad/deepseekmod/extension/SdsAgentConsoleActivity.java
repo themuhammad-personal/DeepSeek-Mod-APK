@@ -130,7 +130,7 @@ public final class SdsAgentConsoleActivity extends Activity {
         denyParams.leftMargin = dp(8);
         sessionActions.addView(deny, denyParams);
         Button stop = button("Stop");
-        stop.setOnClickListener(v -> onStop());
+        stop.setOnClickListener(v -> onStopClicked());
         LinearLayout.LayoutParams stopParams = wrapWrap();
         stopParams.leftMargin = dp(8);
         sessionActions.addView(stop, stopParams);
@@ -337,7 +337,7 @@ public final class SdsAgentConsoleActivity extends Activity {
         refresh();
     }
 
-    private void onStop() {
+    private void onStopClicked() {
         if (!session.requestStop()) {
             Toast.makeText(this, "There is nothing to stop", Toast.LENGTH_SHORT).show();
             return;
