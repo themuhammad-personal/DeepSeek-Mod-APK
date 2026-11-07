@@ -129,7 +129,8 @@ def parse_instruction(instruction):
 
     androguard renders a call as "v1, v2, Lfoo;->bar()V" and a field access as
     "v1, v2, Lfoo;->name Ltype;". The reference keeps the class so that a field
-    access and a call can be told apart by their prefix.
+    access and a call can be told apart by their prefix. Instructions without a
+    reference, such as "move-result-object v4", still carry registers.
     """
     output = instruction.get_output().replace(" ", "")
     if "->" in output:
@@ -138,7 +139,8 @@ def parse_instruction(instruction):
         registers = [item for item in parts if item.startswith("v")]
         owner = parts[-1] if parts else ""
         return registers, f"{owner}->{tail}"
-    return [], output
+    registers = [item for item in output.split(",") if item.startswith("v")]
+    return registers, output
 
 
 def find_instruction(instructions, reference_prefix: str):
