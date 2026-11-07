@@ -99,6 +99,37 @@ public final class SdsAgentSession {
         }
     }
 
+    /**
+     * Registers a proposal and approves it in one step.
+     *
+     * The two steps are not separated on purpose: a proposal that is chosen
+     * while another tool is running must never approve the older proposal.
+     *
+     * @param call the proposal the user chose
+     * @return true when the proposal was approved
+     */
+    public boolean approveProposal(SdsToolCall call) {
+        if (call == null) return false;
+        synchronized (lock) {
+            if (state == State.RUNNING) {
+                // A tool is running, the user has to wait or stop it first.
+                return false;
+            }
+            if (state == State.AWAITING_APPROVAL) {
+                return false;
+            }
+            pendingCallId = call.getId();
+            pendingToolName = call.getName();
+            // A new proposal is a new turn, so the cancellation of an earlier
+            // turn must not stop this one before it even starts.
+            cancellation.reset();
+            state = State.AWAITING_APPROVAL;
+            record(SdsAgentEvent.Type.PROPOSAL_RECEIVED, call.getName());
+            record(SdsAgentEvent.Type.APPROVED, pendingToolName);
+            return true;
+        }
+    }
+
     /** The user approved the pending proposal. */
     public boolean approve(String callId) {
         synchronized (lock) {

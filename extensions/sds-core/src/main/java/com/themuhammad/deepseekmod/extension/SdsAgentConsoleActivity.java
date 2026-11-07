@@ -1287,13 +1287,15 @@ public final class SdsAgentConsoleActivity extends Activity {
         copy.setOnClickListener(v -> copyText(call.getArgumentsJson()));
         actions.addView(copy, wrapWrap());
         Button approve = button("Approve");
-        approve.setOnClickListener(v -> {
-            onProposal(call);
-            onApprove();
-        });
+        approve.setOnClickListener(v -> onApprove(call));
         LinearLayout.LayoutParams approveParams = wrapWrap();
         approveParams.leftMargin = dp(8);
         actions.addView(approve, approveParams);
+        Button deny = button("Deny");
+        deny.setOnClickListener(v -> onDeny(call));
+        LinearLayout.LayoutParams denyParams = wrapWrap();
+        denyParams.leftMargin = dp(8);
+        actions.addView(deny, denyParams);
         Button dismiss = button("Dismiss");
         dismiss.setOnClickListener(v -> {
             SdsAgentHooks.dismissPendingToolCall(call.getId());
@@ -1308,27 +1310,31 @@ public final class SdsAgentConsoleActivity extends Activity {
         return card;
     }
 
-    private void onProposal(SdsToolCall call) {
-        session.onProposal(call);
-    }
-
-    private void onApprove() {
-        String callId = session.getPendingCallId();
-        if (callId == null || callId.isEmpty()) {
-            Toast.makeText(this, "There is no proposal to approve", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        if (!session.approve(callId)) {
+    /** Approves the proposal the user chose. */
+    private void onApprove(SdsToolCall call) {
+        if (!session.approveProposal(call)) {
             Toast.makeText(this, "The proposal cannot be approved in this state", Toast.LENGTH_SHORT).show();
             return;
         }
-        SdsToolCall call = findPending(callId);
+        runApproved(call);
+    }
+
+    /**
+     * Approves the proposal of the session or, when there is none, the first
+     * proposal of the queue.
+     */
+    private void onApprove() {
+        String callId = session.getPendingCallId();
+        SdsToolCall call = callId == null || callId.isEmpty() ? null : findPending(callId);
         if (call == null) {
-            Toast.makeText(this, "The proposal is no longer available", Toast.LENGTH_SHORT).show();
-            refresh();
+            List<SdsToolCall> pending = SdsAgentHooks.snapshotPendingToolCalls();
+            if (!pending.isEmpty()) call = pending.get(0);
+        }
+        if (call == null) {
+            Toast.makeText(this, "There is no proposal to approve", Toast.LENGTH_SHORT).show();
             return;
         }
-        runApproved(call);
+        onApprove(call);
     }
 
     private void runApproved(SdsToolCall call) {
@@ -1375,14 +1381,37 @@ public final class SdsAgentConsoleActivity extends Activity {
         worker.start();
     }
 
+    /**
+     * Denies the proposal the user chose.
+     *
+     * The decision is written into the timeline and the proposal leaves the
+     * queue. Nothing runs.
+     */
+    private void onDeny(SdsToolCall call) {
+        if (call == null) return;
+        // The proposal is registered first, so the decision can be written
+        // into the timeline even when the session was free.
+        session.onProposal(call);
+        if (!session.deny(call.getId())) {
+            Toast.makeText(this, "The proposal cannot be denied in this state", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        SdsAgentHooks.dismissPendingToolCall(call.getId());
+        refresh();
+    }
+
     private void onDeny() {
         String callId = session.getPendingCallId();
-        if (callId == null || callId.isEmpty() || !session.deny(callId)) {
+        SdsToolCall call = callId == null || callId.isEmpty() ? null : findPending(callId);
+        if (call == null) {
+            List<SdsToolCall> pending = SdsAgentHooks.snapshotPendingToolCalls();
+            if (!pending.isEmpty()) call = pending.get(0);
+        }
+        if (call == null) {
             Toast.makeText(this, "There is no proposal to deny", Toast.LENGTH_SHORT).show();
             return;
         }
-        SdsAgentHooks.dismissPendingToolCall(callId);
-        refresh();
+        onDeny(call);
     }
 
     private void onStopClicked() {

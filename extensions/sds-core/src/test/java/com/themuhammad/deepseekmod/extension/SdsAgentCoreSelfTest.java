@@ -44,6 +44,7 @@ public final class SdsAgentCoreSelfTest {
         testStoresWriteAtomically();
         testMcpHandshake();
         testRootfsInstallation();
+        testApproveProposalIsAtomic();
         System.out.println("SDS agent-core self-test: PASS (" + checks + " checks)");
     }
 
@@ -647,6 +648,29 @@ public final class SdsAgentCoreSelfTest {
                 "an unknown argument must be refused");
         SdsRuntimeRegistry.setSandboxManager(null);
         deleteTree(parent);
+    }
+
+    private static void testApproveProposalIsAtomic() {
+        SdsAgentSession session = new SdsAgentSession();
+        SdsToolCall first = new SdsToolCall("call-1", "workspace.list", "{}");
+        SdsToolCall second = new SdsToolCall("call-2", "workspace.read", "{\"path\":\"a.txt\"}");
+
+        check(session.approveProposal(first), "the first proposal must be approved");
+        check(session.getPendingCallId().equals("call-1"),
+                "the approved proposal must be the one of the session");
+        check(session.getState() == SdsAgentSession.State.AWAITING_APPROVAL,
+                "the session must wait for the run");
+
+        // A second proposal must not replace the approved one while it waits.
+        check(!session.approveProposal(second),
+                "a proposal must not be approved while another one waits for its run");
+
+        // After the run the session may take the next proposal.
+        session.onRunStarted();
+        session.onRunFailed(new SdsToolResult(SdsToolResult.Status.FAILED, "", "no"));
+        check(session.approveProposal(second), "the next proposal must be approved after the run");
+        check(session.getPendingCallId().equals("call-2"),
+                "the approved proposal must be the one the user chose");
     }
 
     private static void testRootfsInstallation() throws Exception {
