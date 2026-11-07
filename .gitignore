@@ -18,6 +18,9 @@ local.properties
 *.pem
 *.key
 
+# Local build of the patched APK
+build-local/
+
 # Local reverse-engineering inputs
 official/
 decoded/
