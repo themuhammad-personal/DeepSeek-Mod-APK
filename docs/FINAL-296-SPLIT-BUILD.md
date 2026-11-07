@@ -41,7 +41,13 @@ The workflow job is skipped until that variable is set. This prevents a build fr
 Keep the JKS and passwords in a secure backup. Never commit the keystore or secrets. Losing the key means future builds cannot update an app signed with it.
 
 Workflow: `.github/workflows/build-deepseek-296-single-apk.yml`  
-Trigger: manual `workflow_dispatch` only. The workflow downloads the pinned Drive APK, applies the four existing Morphe patches, verifies hook locations/login/native-only behaviour, signs with the persistent key, and uploads one APK artifact.
+Trigger: manual `workflow_dispatch` or a push to this fix branch. The job is skipped until repository variable `SDS_296_SIGNING_READY=true`.
+
+The workflow downloads the pinned Drive APK and produces two outputs, both signed with the exact same persistent certificate:
+- `deepseek-baseline-2.7.5-296.apk`: the same Drive APK with no Morphe patches (A/B baseline).
+- `deepseek-mod-2.7.5-296.apk`: the APK with all four Morphe patches, plus hook/login/native verification.
+
+Install the baseline first and test a simple chat message. Then install the patched APK as an update (the signing certificate is the same, so there is no need to uninstall the baseline). If baseline chat works but patched chat fails, the patch path is responsible. If both fail, investigate the signature/server/network/device path instead of changing the Agent UI blindly.
 
 ## Important: previous install signature
 
