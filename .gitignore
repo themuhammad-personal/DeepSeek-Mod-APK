@@ -25,3 +25,7 @@ apktool-work/
 jadx-work/
 analysis-work/
 *.zip
+
+# Python bytecode caches
+__pycache__/
+*.pyc
