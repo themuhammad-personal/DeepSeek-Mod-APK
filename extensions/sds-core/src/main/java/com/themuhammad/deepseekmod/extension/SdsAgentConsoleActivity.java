@@ -53,6 +53,13 @@ public final class SdsAgentConsoleActivity extends Activity {
     private TextView studioOutput;
     private Switch sandboxSwitch;
     private EditText studioInput;
+    private TextView researchOutput;
+    private EditText researchInput;
+    private LinearLayout mcpList;
+    private EditText mcpNameInput;
+    private EditText mcpUrlInput;
+    private EditText mcpTokenInput;
+    private Switch networkSwitch;
     private TextView queueStatus;
     private TextView sessionStatus;
     private TextView diagnosticsStatus;
@@ -70,7 +77,7 @@ public final class SdsAgentConsoleActivity extends Activity {
         workspace.mkdirs();
         SdsAppContext.initialize(getApplicationContext());
         registry = buildToolRegistry();
-        executor = new SdsToolExecutor(registry, SdsExecutionPolicy.SAFE_DEFAULT);
+        executor = new SdsToolExecutor(registry, SdsRuntimeRegistry.currentPolicy());
         buildScreen();
         proposalMode.setChecked(SdsAgentHooks.isEnabled());
         proposalMode.setOnCheckedChangeListener((button, checked) -> {
@@ -248,6 +255,102 @@ public final class SdsAgentConsoleActivity extends Activity {
         addGap(root, 12);
         root.addView(projectCard, matchWrap());
 
+        LinearLayout mcpCard = card();
+        mcpCard.addView(text("MCP servers", 16, TEXT, true), matchWrap());
+        TextView mcpNote = text(
+                "A server the user entered. The tools of the server join the allow-list under "
+                        + "mcp.<server>.<tool> and every call needs its own approval.",
+                11, MUTED, false);
+        LinearLayout.LayoutParams mcpNoteParams = matchWrap();
+        mcpNoteParams.topMargin = dp(4);
+        mcpCard.addView(mcpNote, mcpNoteParams);
+        networkSwitch = new Switch(this);
+        networkSwitch.setText("Allow the agent to use the network");
+        networkSwitch.setTextColor(TEXT);
+        networkSwitch.setTextSize(13);
+        networkSwitch.setChecked(SdsRuntimeRegistry.isNetworkAllowed());
+        networkSwitch.setOnCheckedChangeListener((button, checked) -> {
+            SdsRuntimeRegistry.setNetworkAllowed(checked);
+            rebuildExecutor();
+            refreshTools();
+        });
+        LinearLayout.LayoutParams networkSwitchParams = matchWrap();
+        networkSwitchParams.topMargin = dp(6);
+        mcpCard.addView(networkSwitch, networkSwitchParams);
+        mcpNameInput = new EditText(this);
+        mcpNameInput.setHint("server name");
+        mcpNameInput.setTextColor(TEXT);
+        mcpNameInput.setHintTextColor(MUTED);
+        mcpNameInput.setTextSize(13);
+        LinearLayout.LayoutParams mcpNameParams = matchWrap();
+        mcpNameParams.topMargin = dp(6);
+        mcpCard.addView(mcpNameInput, mcpNameParams);
+        mcpUrlInput = new EditText(this);
+        mcpUrlInput.setHint("https://host/path");
+        mcpUrlInput.setTextColor(TEXT);
+        mcpUrlInput.setHintTextColor(MUTED);
+        mcpUrlInput.setTextSize(13);
+        LinearLayout.LayoutParams mcpUrlParams = matchWrap();
+        mcpUrlParams.topMargin = dp(4);
+        mcpCard.addView(mcpUrlInput, mcpUrlParams);
+        mcpTokenInput = new EditText(this);
+        mcpTokenInput.setHint("token, optional and kept on the device");
+        mcpTokenInput.setTextColor(TEXT);
+        mcpTokenInput.setHintTextColor(MUTED);
+        mcpTokenInput.setTextSize(13);
+        LinearLayout.LayoutParams mcpTokenParams = matchWrap();
+        mcpTokenParams.topMargin = dp(4);
+        mcpCard.addView(mcpTokenInput, mcpTokenParams);
+        Button addServer = button("Add the server");
+        addServer.setOnClickListener(v -> onAddMcpServer());
+        LinearLayout.LayoutParams addServerParams = wrapWrap();
+        addServerParams.topMargin = dp(6);
+        mcpCard.addView(addServer, addServerParams);
+        Button refreshServers = button("Ask the servers for their tools");
+        refreshServers.setOnClickListener(v -> onRefreshMcpTools());
+        LinearLayout.LayoutParams refreshServersParams = wrapWrap();
+        refreshServersParams.topMargin = dp(6);
+        mcpCard.addView(refreshServers, refreshServersParams);
+        mcpList = new LinearLayout(this);
+        mcpList.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams mcpListParams = matchWrap();
+        mcpListParams.topMargin = dp(6);
+        mcpCard.addView(mcpList, mcpListParams);
+        addGap(root, 12);
+        root.addView(mcpCard, matchWrap());
+
+        LinearLayout researchCard = card();
+        researchCard.addView(text("Deep Research", 16, TEXT, true), matchWrap());
+        TextView researchNote = text(
+                "Fetches one address and returns its text. The synthesis is written by the "
+                        + "model in the chat, the app never invents an answer.",
+                11, MUTED, false);
+        LinearLayout.LayoutParams researchNoteParams = matchWrap();
+        researchNoteParams.topMargin = dp(4);
+        researchCard.addView(researchNote, researchNoteParams);
+        researchInput = new EditText(this);
+        researchInput.setHint("https://address");
+        researchInput.setTextColor(TEXT);
+        researchInput.setHintTextColor(MUTED);
+        researchInput.setTextSize(13);
+        LinearLayout.LayoutParams researchInputParams = matchWrap();
+        researchInputParams.topMargin = dp(6);
+        researchCard.addView(researchInput, researchInputParams);
+        Button fetchAddress = button("Fetch the address after an approval");
+        fetchAddress.setOnClickListener(v -> onFetchResearchAddress());
+        LinearLayout.LayoutParams fetchAddressParams = wrapWrap();
+        fetchAddressParams.topMargin = dp(6);
+        researchCard.addView(fetchAddress, fetchAddressParams);
+        researchOutput = new TextView(this);
+        researchOutput.setTextColor(Color.rgb(180, 210, 255));
+        researchOutput.setTextSize(12);
+        researchOutput.setVisibility(View.GONE);
+        LinearLayout.LayoutParams researchOutputParams = matchWrap();
+        researchOutputParams.topMargin = dp(6);
+        researchCard.addView(researchOutput, researchOutputParams);
+        addGap(root, 12);
+        root.addView(researchCard, matchWrap());
+
         LinearLayout studioCard = card();
         studioCard.addView(text("Linux Studio", 16, TEXT, true), matchWrap());
         TextView studioNote = text(
@@ -420,6 +523,12 @@ public final class SdsAgentConsoleActivity extends Activity {
                 built.register(tool);
             }
         }
+        for (SdsTool tool : SdsResearchTools.createRegistry().all()) {
+            built.register(tool);
+        }
+        for (SdsTool tool : SdsMcpTools.createRegistry(SdsRuntimeRegistry.getMcpConfigStore()).all()) {
+            built.register(tool);
+        }
         return built;
     }
 
@@ -435,6 +544,7 @@ public final class SdsAgentConsoleActivity extends Activity {
         refreshArtifacts();
         refreshGenerativeUi();
         refreshSandbox();
+        refreshMcpServers();
     }
 
     private void onAddMemory() {
@@ -528,6 +638,179 @@ public final class SdsAgentConsoleActivity extends Activity {
             rowParams.topMargin = dp(4);
             projectList.addView(row, rowParams);
         }
+    }
+
+    private void rebuildExecutor() {
+        if (executor != null) executor.shutdown();
+        executor = new SdsToolExecutor(registry, SdsRuntimeRegistry.currentPolicy());
+    }
+
+    private void onAddMcpServer() {
+        SdsMcpConfigStore store = SdsRuntimeRegistry.getMcpConfigStore();
+        if (store == null) {
+            Toast.makeText(this, "The MCP list is not ready", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        String name = mcpNameInput == null ? "" : mcpNameInput.getText().toString().trim();
+        String url = mcpUrlInput == null ? "" : mcpUrlInput.getText().toString().trim();
+        String token = mcpTokenInput == null ? "" : mcpTokenInput.getText().toString().trim();
+        try {
+            store.add(name, url, token);
+            if (mcpNameInput != null) mcpNameInput.setText("");
+            if (mcpUrlInput != null) mcpUrlInput.setText("");
+            if (mcpTokenInput != null) mcpTokenInput.setText("");
+            refresh();
+        } catch (IllegalArgumentException | IllegalStateException refused) {
+            Toast.makeText(this, String.valueOf(refused.getMessage()), Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void onRefreshMcpTools() {
+        final SdsMcpConfigStore store = SdsRuntimeRegistry.getMcpConfigStore();
+        if (store == null || store.enabledServers().isEmpty()) {
+            Toast.makeText(this, "There is no enabled server", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (!SdsRuntimeRegistry.isNetworkAllowed()) {
+            Toast.makeText(this, "The network is switched off", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        final Thread worker = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                String message;
+                try {
+                    List<SdsMcpClient.ToolInfo> tools = SdsMcpTools.refresh(store);
+                    message = tools.isEmpty()
+                            ? "the servers offered no tool"
+                            : "the servers offered " + tools.size() + " tool(s)";
+                } catch (Exception refused) {
+                    message = "a server could not be reached";
+                }
+                final String text = message;
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        registry = buildToolRegistry();
+                        rebuildExecutor();
+                        refresh();
+                        Toast.makeText(SdsAgentConsoleActivity.this, text, Toast.LENGTH_SHORT).show();
+                    }
+                });
+            }
+        }, "sds-mcp");
+        worker.start();
+    }
+
+    private void refreshMcpServers() {
+        if (mcpList == null) return;
+        mcpList.removeAllViews();
+        SdsMcpConfigStore store = SdsRuntimeRegistry.getMcpConfigStore();
+        if (store == null || store.size() == 0) {
+            mcpList.addView(text("No server yet.", 13, MUTED, false), matchWrap());
+            return;
+        }
+        for (SdsMcpConfigStore.Server server : store.snapshot()) {
+            LinearLayout column = new LinearLayout(this);
+            column.setOrientation(LinearLayout.VERTICAL);
+            TextView name = text(server.getName() + " - " + server.getUrl(), 12, TEXT, false);
+            column.addView(name, matchWrap());
+            TextView tools = text("tools: "
+                    + (SdsMcpTools.knownTools(server.getName()).isEmpty()
+                    ? "none known yet"
+                    : String.join(", ", SdsMcpTools.knownTools(server.getName()))),
+                    11, MUTED, false);
+            LinearLayout.LayoutParams toolsParams = matchWrap();
+            toolsParams.topMargin = dp(2);
+            column.addView(tools, toolsParams);
+
+            LinearLayout buttons = new LinearLayout(this);
+            buttons.setGravity(Gravity.CENTER_VERTICAL);
+            Button toggle = button(server.isEnabled() ? "Disable" : "Enable");
+            toggle.setOnClickListener(v -> {
+                SdsMcpConfigStore current = SdsRuntimeRegistry.getMcpConfigStore();
+                if (current != null) current.setEnabled(server.getName(), !server.isEnabled());
+                registry = buildToolRegistry();
+                rebuildExecutor();
+                refresh();
+            });
+            buttons.addView(toggle, wrapWrap());
+            Button delete = button("Delete");
+            delete.setOnClickListener(v -> {
+                SdsMcpConfigStore current = SdsRuntimeRegistry.getMcpConfigStore();
+                if (current != null) current.remove(server.getName());
+                registry = buildToolRegistry();
+                rebuildExecutor();
+                refresh();
+            });
+            buttons.addView(delete, wrapWrap());
+            LinearLayout.LayoutParams buttonParams = matchWrap();
+            buttonParams.topMargin = dp(4);
+            column.addView(buttons, buttonParams);
+
+            LinearLayout.LayoutParams columnParams = matchWrap();
+            columnParams.topMargin = dp(6);
+            mcpList.addView(column, columnParams);
+        }
+    }
+
+    private void onFetchResearchAddress() {
+        final String url = researchInput == null ? "" : researchInput.getText().toString().trim();
+        if (url.isEmpty()) {
+            Toast.makeText(this, "The address is required", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (!url.startsWith("https://")) {
+            Toast.makeText(this, "Only https is allowed", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (!SdsRuntimeRegistry.isNetworkAllowed()) {
+            Toast.makeText(this, "The network is switched off", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        // The approval shows the exact address before anything is fetched.
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("Fetch this address?")
+                .setMessage(url)
+                .setNegativeButton(android.content.DialogInterface.BUTTON_NEGATIVE, null)
+                .setPositiveButton(android.content.DialogInterface.BUTTON_POSITIVE,
+                        (dialog, which) -> fetchResearchAddress(url))
+                .show();
+    }
+
+    private void fetchResearchAddress(final String url) {
+        if (researchOutput != null) {
+            researchOutput.setVisibility(View.VISIBLE);
+            researchOutput.setText("fetching...");
+        }
+        final Thread worker = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                final String text;
+                try {
+                    SdsHttpFetcher.Response response =
+                            SdsHttpFetcher.fetch(url, SdsHttpFetcher.MAX_BODY_BYTES);
+                    if (!response.isOk()) {
+                        text = "the address answered with the status " + response.getStatus();
+                    } else {
+                        text = SdsHttpFetcher.toPlainText(response.getBody(),
+                                SdsResearchTools.MAX_TEXT_CHARS);
+                    }
+                } catch (Exception refused) {
+                    text = "the address could not be reached";
+                }
+                final String result = text;
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        if (researchOutput != null) {
+                            researchOutput.setText(result.isEmpty() ? "no text" : result);
+                        }
+                    }
+                });
+            }
+        }, "sds-research");
+        worker.start();
     }
 
     private void refreshSandbox() {

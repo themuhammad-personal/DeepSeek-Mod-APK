@@ -23,6 +23,8 @@ public final class SdsRuntimeRegistry {
     private static volatile SdsArtifactStore artifactStore;
     private static volatile SdsUiSpec lastUiSpec;
     private static volatile SdsSandboxManager sandboxManager;
+    private static volatile SdsMcpConfigStore mcpConfigStore;
+    private static volatile boolean networkAllowed;
     private static volatile boolean sandboxEnabled;
     private static volatile boolean includeMemoryInPrompt;
     private static volatile boolean defaultsRegistered;
@@ -52,6 +54,35 @@ public final class SdsRuntimeRegistry {
 
     public static void setProjectRegistry(SdsProjectRegistry value) {
         projectRegistry = value;
+    }
+
+    /** The MCP server list, or null when it was never prepared. */
+    public static SdsMcpConfigStore getMcpConfigStore() {
+        return mcpConfigStore;
+    }
+
+    public static void setMcpConfigStore(SdsMcpConfigStore value) {
+        mcpConfigStore = value;
+    }
+
+    /**
+     * True when the agent may use the network.
+     *
+     * It is off by default, so a tool that needs the network is refused until
+     * the user turns it on in the console.
+     */
+    public static boolean isNetworkAllowed() {
+        return networkAllowed;
+    }
+
+    public static void setNetworkAllowed(boolean value) {
+        networkAllowed = value;
+    }
+
+    /** The policy the executor uses, built from the current switches. */
+    public static SdsExecutionPolicy currentPolicy() {
+        return new SdsExecutionPolicy(true, 60_000L, SdsExecutionPolicy.MAX_OUTPUT_CHARS,
+                networkAllowed, SdsExecutionPolicy.MAX_TOOL_CALLS_PER_TURN);
     }
 
     /** The Linux Studio runtime, or null when it was never prepared. */

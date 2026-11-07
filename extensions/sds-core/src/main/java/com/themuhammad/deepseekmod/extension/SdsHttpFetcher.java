@@ -1,0 +1,175 @@
+package com.themuhammad.deepseekmod.extension;
+
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.Charset;
+
+/**
+ * The bounded HTTPS fetcher.
+ *
+ * It is used by the MCP client and by the research tool. The rules are
+ * deliberately strict: only https, no redirect is followed, the answer is
+ * bounded and the body is reduced to readable text, so nothing that a remote
+ * page contains can become a command, a script or a view.
+ */
+public final class SdsHttpFetcher {
+    public static final int MAX_BODY_BYTES = 512 * 1024;
+    public static final int CONNECT_TIMEOUT_MS = 10_000;
+    public static final int READ_TIMEOUT_MS = 20_000;
+
+    private static final Charset UTF8 = Charset.forName("UTF-8");
+
+    private SdsHttpFetcher() {
+    }
+
+    /** The result of a fetch. */
+    public static final class Response {
+        private final int status;
+        private final String body;
+        private final String contentType;
+
+        Response(int status, String body, String contentType) {
+            this.status = status;
+            this.body = body;
+            this.contentType = contentType;
+        }
+
+        public int getStatus() { return status; }
+        public String getBody() { return body; }
+        public String getContentType() { return contentType; }
+        public boolean isOk() { return status >= 200 && status < 300; }
+    }
+
+    /**
+     * Fetches an address.
+     *
+     * @param url the address, it has to use https
+     * @param maxBytes the largest answer that is read
+     */
+    public static Response fetch(String url, int maxBytes) throws IOException {
+        if (url == null || !url.startsWith("https://")) {
+            throw new IOException("only https is allowed");
+        }
+        if (url.length() > SdsMcpConfigStore.MAX_URL_LENGTH) {
+            throw new IOException("the address is too long");
+        }
+        HttpURLConnection connection = null;
+        try {
+            connection = (HttpURLConnection) new URL(url).openConnection();
+            // A redirect is not followed, so a server cannot move the request
+            // to another host behind the back of the user.
+            connection.setInstanceFollowRedirects(false);
+            connection.setRequestMethod("GET");
+            connection.setConnectTimeout(CONNECT_TIMEOUT_MS);
+            connection.setReadTimeout(READ_TIMEOUT_MS);
+            connection.setRequestProperty("Accept", "text/plain, text/html, application/json;q=0.9");
+            connection.setRequestProperty("User-Agent", "DeepSeek-Android-Agent/1.0");
+            int status = connection.getResponseCode();
+            InputStream stream = status >= 400 ? connection.getErrorStream() : connection.getInputStream();
+            String body = readBounded(stream, maxBytes);
+            return new Response(status, body, connection.getContentType());
+        } catch (IOException failure) {
+            throw failure;
+        } catch (Exception refused) {
+            throw new IOException("the address could not be reached");
+        } finally {
+            if (connection != null) connection.disconnect();
+        }
+    }
+
+    private static String readBounded(InputStream stream, int maxBytes) throws IOException {
+        if (stream == null) return "";
+        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+        byte[] chunk = new byte[8 * 1024];
+        int read;
+        int total = 0;
+        try {
+            while ((read = stream.read(chunk)) > 0) {
+                total += read;
+                if (total > maxBytes) break;
+                buffer.write(chunk, 0, read);
+            }
+        } finally {
+            stream.close();
+        }
+        return new String(buffer.toByteArray(), UTF8);
+    }
+
+    /**
+     * Reduces a document to readable text.
+     *
+     * The script and the style parts are dropped, the tags are removed and the
+     * common entities are decoded. The result is plain text, so a page can
+     * never inject a view, a script or a command.
+     */
+    public static String toPlainText(String document, int maxChars) {
+        if (document == null) return "";
+        StringBuilder builder = new StringBuilder();
+        int index = 0;
+        int length = document.length();
+        while (index < length && builder.length() < maxChars) {
+            char c = document.charAt(index);
+            if (c == '<') {
+                int end = document.indexOf('>', index);
+                if (end < 0) break;
+                String tag = document.substring(index + 1, end).toLowerCase(java.util.Locale.US);
+                if (tag.startsWith("script") || tag.startsWith("style") || tag.startsWith("noscript")) {
+                    int close = document.toLowerCase(java.util.Locale.US).indexOf("</" + tag.split(" ")[0], end);
+                    if (close > 0) {
+                        index = document.indexOf('>', close);
+                        index = index < 0 ? length : index + 1;
+                        builder.append('\n');
+                        continue;
+                    }
+                }
+                if (tag.startsWith("br") || tag.startsWith("p") || tag.startsWith("div")
+                        || tag.startsWith("li") || tag.startsWith("tr") || tag.startsWith("h")) {
+                    builder.append('\n');
+                }
+                index = end + 1;
+                continue;
+            }
+            if (c == '&') {
+                int end = document.indexOf(';', index);
+                if (end > 0 && end - index <= 8) {
+                    String entity = document.substring(index + 1, end);
+                    String decoded = decodeEntity(entity);
+                    if (decoded != null) {
+                        builder.append(decoded);
+                        index = end + 1;
+                        continue;
+                    }
+                }
+            }
+            builder.append(c);
+            index++;
+        }
+        String text = builder.toString();
+        text = text.replaceAll("[ \\t]{2,}", " ");
+        text = text.replaceAll("\\n{3,}", "\n\n");
+        return text.trim();
+    }
+
+    private static String decodeEntity(String entity) {
+        if ("amp".equals(entity)) return "&";
+        if ("lt".equals(entity)) return "<";
+        if ("gt".equals(entity)) return ">";
+        if ("quot".equals(entity)) return "\"";
+        if ("apos".equals(entity)) return "'";
+        if ("nbsp".equals(entity)) return " ";
+        if (entity.startsWith("#")) {
+            try {
+                int code = entity.startsWith("#x") || entity.startsWith("#X")
+                        ? Integer.parseInt(entity.substring(2), 16)
+                        : Integer.parseInt(entity.substring(1));
+                return String.valueOf((char) code);
+            } catch (NumberFormatException refused) {
+                return null;
+            }
+        }
+        return null;
+    }
+}

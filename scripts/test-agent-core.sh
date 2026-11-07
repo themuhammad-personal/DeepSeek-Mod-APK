@@ -32,6 +32,13 @@ javac -encoding UTF-8 -d "$TMP/classes" \
   "$SRC/SdsSandboxConfig.java" \
   "$SRC/SdsSandboxManager.java" \
   "$SRC/SdsSandboxTool.java" \
+  "$SRC/SdsJson.java" \
+  "$SRC/SdsJsonWriter.java" \
+  "$SRC/SdsHttpFetcher.java" \
+  "$SRC/SdsMcpConfigStore.java" \
+  "$SRC/SdsMcpClient.java" \
+  "$SRC/SdsMcpTools.java" \
+  "$SRC/SdsResearchTools.java" \
   "$SRC/SdsSlashCommands.java" \
   "$SRC/SdsRuntimeRegistry.java" \
   "$SRC/SdsAgentHooks.java"

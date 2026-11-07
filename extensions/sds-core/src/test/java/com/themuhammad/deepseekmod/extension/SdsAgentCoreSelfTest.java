@@ -2,6 +2,8 @@ package com.themuhammad.deepseekmod.extension;
 
 import java.io.File;
 import java.nio.file.Files;
+import java.util.List;
+import java.util.Map;
 
 /** Plain-Java regression tests; no Android device or third-party test framework is needed. */
 public final class SdsAgentCoreSelfTest {
@@ -33,6 +35,9 @@ public final class SdsAgentCoreSelfTest {
         testArtifactTools();
         testGenerativeUi();
         testLinuxStudio();
+        testStrictJsonReader();
+        testMcpConfiguration();
+        testNetworkToolsStayRefused();
         System.out.println("SDS agent-core self-test: PASS (" + checks + " checks)");
     }
 
@@ -382,6 +387,134 @@ public final class SdsAgentCoreSelfTest {
     private static void check(boolean condition, String message) {
         checks++;
         if (!condition) throw new AssertionError(message);
+    }
+
+    private static void testStrictJsonReader() {
+        Map<String, Object> object = SdsJson.parseObject(
+                "{\"name\":\"value\",\"count\":3,\"flag\":true,\"nothing\":null}");
+        check("value".equals(SdsJson.optString(object, "name")), "a string must be read");
+        check(SdsJson.asLong(object.get("count")) == 3L, "a number must be read");
+        check(Boolean.TRUE.equals(object.get("flag")), "a boolean must be read");
+        check(object.get("nothing") == null, "a null must be read");
+        check(SdsJson.optString(object, "missing") == null, "a missing key must be null");
+
+        List<Object> array = SdsJson.parseArray("[1, \"two\", {\"three\": true}]");
+        check(array.size() == 3, "the array must have three entries");
+        check(SdsJson.asObject(array.get(2)) != null, "a nested object must be read");
+
+        check("line\nbreak".equals(SdsJson.optString(
+                SdsJson.parseObject("{\"text\":\"line\\nbreak\"}"), "text")),
+                "an escape must be decoded");
+        check("\\u0041".equals(SdsJson.optString(
+                SdsJson.parseObject("{\"text\":\"\\\\u0041\"}"), "text")),
+                "a backslash must be kept");
+
+        String[] broken = {
+                "{\"a\":1,}",
+                "{\"a\":1}{\"b\":2}",
+                "{a:1}",
+                "[1,2",
+                "\"unclosed",
+                "{\"a\":1,\"a\":2}",
+                "nope",
+        };
+        for (String document : broken) {
+            boolean refused = false;
+            try {
+                SdsJson.parse(document);
+            } catch (IllegalArgumentException expected) {
+                refused = true;
+            }
+            check(refused, "a broken document must be refused: " + document);
+        }
+
+        // The writer and the reader have to agree.
+        Map<String, Object> source = new java.util.LinkedHashMap<>();
+        source.put("name", "value");
+        source.put("count", 3L);
+        source.put("flag", Boolean.TRUE);
+        source.put("list", java.util.Arrays.asList("a", "b"));
+        Map<String, Object> round = SdsJson.parseObject(SdsJsonWriter.write(source));
+        check("value".equals(SdsJson.optString(round, "name")), "the round trip must keep the string");
+        check(SdsJson.asLong(round.get("count")) == 3L, "the round trip must keep the number");
+        check(SdsJson.optArray(round, "list").size() == 2, "the round trip must keep the list");
+    }
+
+    private static void testMcpConfiguration() throws Exception {
+        File parent = Files.createTempDirectory("sds-mcp-test").toFile();
+        File file = new File(parent, "mcp.txt");
+        SdsMcpConfigStore store = new SdsMcpConfigStore(file);
+        check(store.size() == 0, "a new list must be empty");
+        SdsMcpConfigStore.Server server = store.add("local", "https://127.0.0.1:9000/mcp", "secret");
+        check("local".equals(server.getName()), "the name must be kept");
+        check("mcp.local.".equals(server.toolPrefix()), "the tool prefix must be derived");
+        check(!server.isEnabled(), "a new server must be switched off");
+        check(store.enabledServers().isEmpty(), "a switched off server must not be used");
+
+        boolean refused = false;
+        try { store.add("plain", "http://example.org/mcp", ""); } catch (IllegalArgumentException expected) {
+            refused = true;
+        }
+        check(refused, "a server without https must be refused");
+        refused = false;
+        try { store.add("local", "https://example.org/mcp", ""); } catch (IllegalStateException expected) {
+            refused = true;
+        }
+        check(refused, "a duplicate server must be refused");
+
+        check(store.setEnabled("local", true), "the server must be switchable");
+        check(store.enabledServers().size() == 1, "the switched on server must be listed");
+
+        SdsMcpConfigStore reopened = new SdsMcpConfigStore(file);
+        check(reopened.size() == 1, "the list must survive a restart");
+        check(reopened.find("local") != null, "the server must be found after a restart");
+        check(reopened.find("local").getToken().equals("secret"), "the token must survive a restart");
+
+        // The tools of a server join the allow-list under a prefixed name.
+        SdsMcpTools.rememberTool("local", "search");
+        SdsToolRegistry registry = SdsMcpTools.createRegistry(reopened);
+        check(registry.contains("mcp.local.search"), "the tool of the server must be registered");
+        SdsTool tool = registry.find("mcp.local.search");
+        check(tool.requiresNetwork(), "the tool of a server must need the network");
+        check(!tool.isReadOnly(), "the tool of a server must not be read-only");
+
+        check(reopened.remove("local"), "the server must be removable");
+        check(reopened.size() == 0, "the server must be gone");
+        deleteTree(parent);
+    }
+
+    private static void testNetworkToolsStayRefused() throws Exception {
+        File parent = Files.createTempDirectory("sds-network-test").toFile();
+        File workspace = new File(parent, "workspace");
+        check(workspace.mkdirs(), "workspace create failed");
+        SdsToolRegistry registry = SdsResearchTools.createRegistry();
+        check(registry.contains(SdsResearchTools.FETCH), "the fetch tool must be registered");
+        SdsTool tool = registry.find(SdsResearchTools.FETCH);
+        check(tool.requiresNetwork(), "the fetch tool must need the network");
+        check(!tool.isReadOnly(), "the fetch tool must not be read-only");
+
+        SdsExecutionPolicy safe = SdsExecutionPolicy.SAFE_DEFAULT;
+        check(!safe.isNetworkAllowed(), "the network must be off by default");
+        SdsToolExecutor executor = new SdsToolExecutor(registry, safe);
+        try {
+            SdsToolResult refused = executor.run(
+                    new SdsToolCall("call-1", SdsResearchTools.FETCH, "{\"url\":\"https://example.org/\"}"),
+                    new SdsToolContext(workspace, safe, new SdsCancellation()), true);
+            check(refused.getStatus() == SdsToolResult.Status.FAILED,
+                    "a network tool must be refused while the network is off");
+        } finally {
+            executor.shutdown();
+        }
+
+        // The plain text extraction must not keep any markup.
+        String text = SdsHttpFetcher.toPlainText(
+                "<html><head><script>alert(1)</script><style>a{}</style></head>"
+                        + "<body><p>Hello &amp; welcome</p><br><script>bad()</script></body></html>", 500);
+        check(!text.contains("<"), "the markup must be removed");
+        check(!text.contains("alert(1)"), "the script must be removed");
+        check(!text.contains("bad()"), "the second script must be removed");
+        check(text.contains("Hello & welcome"), "the entities must be decoded");
+        deleteTree(parent);
     }
 
     private static void testLinuxStudio() throws Exception {

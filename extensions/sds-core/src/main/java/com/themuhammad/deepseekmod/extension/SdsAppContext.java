@@ -16,6 +16,7 @@ public final class SdsAppContext {
     public static final String MEMORY_FILE = "sds-memory.txt";
     public static final String PROJECT_FILE = "sds-projects.txt";
     public static final String ARTIFACT_FILE = "sds-artifacts.txt";
+    public static final String MCP_FILE = "sds-mcp.txt";
 
     private SdsAppContext() {
     }
@@ -47,6 +48,7 @@ public final class SdsAppContext {
                 // The runtime stays unavailable when the path is unknown.
             }
             SdsRuntimeRegistry.setSandboxManager(new SdsSandboxManager(nativeLibraryDirectory, files));
+            SdsRuntimeRegistry.setMcpConfigStore(new SdsMcpConfigStore(new File(files, MCP_FILE)));
             SdsRuntimeRegistry.ensureDefaults();
         } catch (Throwable ignored) {
             // A feature that cannot prepare itself stays inactive.
