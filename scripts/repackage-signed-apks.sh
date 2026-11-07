@@ -89,7 +89,7 @@ sign_one() {
 
   "$ZIPALIGN" -f -p 4 "$unsigned" "$aligned"
   echo "Signing $name for minSdk 32" >&2
-  "$APKSIGNER" sign --min-sdk-version 32 --v1-signing-enabled false \
+  "$APKSIGNER" sign --min-sdk-version 32 --v1-signing-enabled true \
     --v2-signing-enabled true --v3-signing-enabled true --v4-signing-enabled false \
     --ks "$SDS_KEYSTORE" --ks-key-alias "$SDS_KEY_ALIAS" \
     --ks-pass env:SDS_KEYSTORE_PASSWORD --key-pass env:SDS_KEY_PASSWORD \
