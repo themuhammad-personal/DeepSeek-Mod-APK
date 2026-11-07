@@ -42,6 +42,7 @@ public final class SdsAgentCoreSelfTest {
         testStopDoesNotPoisonTheNextTurn();
         testDiagnosticsStayBounded();
         testStoresWriteAtomically();
+        testMcpHandshake();
         System.out.println("SDS agent-core self-test: PASS (" + checks + " checks)");
     }
 
@@ -870,6 +871,57 @@ public final class SdsAgentCoreSelfTest {
                 "the projects must survive a restart");
 
         deleteTree(parent);
+    }
+
+    private static void testMcpHandshake() throws Exception {
+        Map<String, Object> parameters = SdsMcpClient.buildInitializeParameters();
+        check(SdsMcpClient.PREFERRED_PROTOCOL_VERSION.equals(parameters.get("protocolVersion")),
+                "the handshake has to carry the version of the client");
+        check(parameters.get("capabilities") instanceof Map, "the handshake needs the capabilities");
+        Map<String, Object> clientInfo = SdsJson.asObject(parameters.get("clientInfo"));
+        check(clientInfo != null && clientInfo.get("name") != null,
+                "the handshake needs the name of the client");
+
+        SdsMcpConfigStore.Server server = new SdsMcpConfigStore.Server(
+                "local", "https://mcp.example.org/mcp", "token", false);
+        SdsMcpClient client = new SdsMcpClient(server, null);
+        check(!client.isInitialized(), "the client must not be initialized before the handshake");
+        check(SdsMcpClient.PREFERRED_PROTOCOL_VERSION.equals(client.getProtocolVersion()),
+                "the client speaks its preferred version before the handshake");
+
+        Map<String, Object> answer = new java.util.LinkedHashMap<>();
+        answer.put("protocolVersion", "2024-11-05");
+        client.applyInitializeResult(answer);
+        check("2024-11-05".equals(client.getProtocolVersion()),
+                "the negotiated version of the server has to be used");
+
+        boolean refused = false;
+        try {
+            client.applyInitializeResult(new java.util.LinkedHashMap<String, Object>());
+        } catch (java.io.IOException expected) {
+            refused = true;
+        }
+        check(refused, "a server without a version has to be refused");
+
+        refused = false;
+        Map<String, Object> broken = new java.util.LinkedHashMap<>();
+        broken.put("protocolVersion", "not-a-version");
+        try {
+            client.applyInitializeResult(broken);
+        } catch (java.io.IOException expected) {
+            refused = true;
+        }
+        check(refused, "a server with an unknown version has to be refused");
+
+        refused = false;
+        Map<String, Object> tooOld = new java.util.LinkedHashMap<>();
+        tooOld.put("protocolVersion", "2023-01-01");
+        try {
+            client.applyInitializeResult(tooOld);
+        } catch (java.io.IOException expected) {
+            refused = true;
+        }
+        check(refused, "a server with a version that is too old has to be refused");
     }
 
     private static void testPromptExpansion() throws Exception {
