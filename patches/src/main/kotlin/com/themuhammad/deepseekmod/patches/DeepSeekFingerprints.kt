@@ -54,6 +54,10 @@ internal object ChatResponseContentSetFingerprint : Fingerprint(
 /**
  * SSE APPEND decodes the incoming chunk, joins it to the current content, then
  * updates the holder with dea.m(). The second value argument is the full String.
+ *
+ * The inspected code ignores the boolean result of dea.m(), so there is no
+ * move-result instruction after the call. A fingerprint that expects one does
+ * not resolve against the inspected build.
  */
 internal object ChatResponseContentAppendFingerprint : Fingerprint(
     definingClass = "Lv44;",
@@ -67,7 +71,6 @@ internal object ChatResponseContentAppendFingerprint : Fingerprint(
             name = "m",
             parameters = listOf("Ljava/lang/Object;", "Ljava/lang/Object;"),
             returnType = "Z"
-        ),
-        opcode(Opcode.MOVE_RESULT, location = MatchAfterImmediately())
+        )
     )
 )
