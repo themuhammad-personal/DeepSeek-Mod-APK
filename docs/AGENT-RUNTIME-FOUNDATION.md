@@ -137,7 +137,8 @@ See docs/DEEPSEEK-STREAM-TRACE.md for the obfuscated classes, methods and eviden
 - The allow-list is built by the console from the registered tools only. The workspace, the artifact and the Generative UI tools are always there, the sandbox command only while its switch is on, and the tools of an MCP server only while that server is on, so removing the population removes every executable tool without touching the UI.
 - The registry refuses a duplicate name, so a tool cannot be replaced at runtime.
 - The chat entry is a separate patch, so the console can be reached from the
-  launcher alone.
+  chat screen alone. The console itself is not exported and has no launcher
+  entry, so no other app can open it.
 - The Linux Studio is switched off by a switch in the console, and the switch
   removes the tool from the allow-list instead of only hiding it.
 - The network is switched off by a switch in the console and the switch
@@ -152,13 +153,17 @@ See docs/DEEPSEEK-STREAM-TRACE.md for the obfuscated classes, methods and eviden
 
 `bash scripts/test-agent-core.sh` runs on every push in CI and covers: the safe defaults, the opt-in prompt, the queue and its deduplication, the malformed payload handling, the strict JSON grammar, the per-response call limit, the workspace confinement, the observer diagnostics, every session transition, the strict tool arguments, the allow-list, the approval gate, the unregistered tool refusal, the network refusal, the timeout and the cancellation, the workspace tools staying inside the workspace, the memory store, the project registry, the slash commands, the prompt expansion, the artifact store and its tools, the Generative UI specification, the state of the Linux Studio, the strict JSON
 reader and its writer, the MCP server list and the refusal of a network tool
-while the network is off.
+while the network is off, the handshake of the MCP client and the refusal of an
+unknown protocol version, the atomic write of the stores, the uniqueness of the
+artifact identifiers, the installation of the root filesystem and the refusal
+of an archive that is not the pinned one, the atomic approval of a proposal
+and the refusal of a second approval while a proposal waits for its run.
 
 The CI run of the runtime is recorded in the build workflow; the results are build-verified, not device-runtime-verified.
 
 ## Explicitly not implemented
 
-The stream path is statically traced but not yet runtime-verified on a physical device. Callback frequency, coroutine/thread context, lifecycle ordering and interaction with Compose rendering are still unknown. The console entry in the chat screen is proved statically only, its placement and its touch behaviour on a device are unproven. The current branch does not invoke MCP tools, does not run a research without the network switch and an approval, does not send tool results back to DeepSeek, does not expose a stop control for the official chat itself, and does not bundle the PRoot runtime of the Linux Studio. The proposal queue is in-memory and the switches of the console are stored in the app-private preferences, which are not checked on a device yet.
+The stream path is statically traced but not yet runtime-verified on a physical device. Callback frequency, coroutine/thread context, lifecycle ordering and interaction with Compose rendering are still unknown. The console entry in the chat screen is proved statically only, its placement and its touch behaviour on a device are unproven. The MCP tools and the research fetch only run with the network switch on and an approval of the user, the tool result only reaches the conversation while the handback switch is on, the official chat itself has no stop control and the PRoot runtime of the Linux Studio is not bundled, so the studio refuses to run. The proposal queue is in-memory and the switches of the console are stored in the app-private preferences, which are not checked on a device yet.
 
 Therefore, this is a native agent runtime with an approval-gated executor for the private workspace, not a complete multi-turn agent.
 
@@ -168,10 +173,10 @@ Therefore, this is a native agent runtime with an approval-gated executor for th
 2. Run the patched APK on a real device and prove the SET/APPEND hook fires with complete assistant content, without excessive duplicates or UI-thread stalls. The observer diagnostics are the instrument for this.
 3. ~~Trace the Compose navigation/message renderer and embed a Console entry into supported in-app navigation.~~ The entry is a plain view on the window of `MainActivity`, proven statically; the device check of the placement is still open.
 4. Feed tool results back only through a verified supported user-message flow; never spoof or rewrite login/session traffic.
-5. Implement MCP with a native transport, an explicit consent step and a credential store.
+5. ~~Implement MCP with a native transport, an explicit consent step and a credential store.~~ Done: the native JSON-RPC client speaks the handshake of the specification, the consent is the approval of the console and the token of a server stays in the app-private directory.
 6. ~~Implement the remaining feature modules of docs/FEATURE-PORT-MAP.md, each with its own UI, lifecycle, permissions, persistence, tests and failure modes.~~ The slash commands, the memories, the projects, the artifacts, the export, the Generative UI, the Linux Studio, the MCP client and the research retrieval are done. The advertisement bar of the reference product is not ported on purpose, see docs/NATIVE-FEATURE-MODULES.md.
 7. Test stop, timeout, process death, rotation, denied permissions and malformed streams on a real device.
 
 ## Security caveat
 
-Nothing in this extension silently executes a proposal. PRoot, if added later, runs under the app UID and is not a kernel-level security boundary. Any future executor must require explicit user approval by default.
+Nothing in this extension silently executes a proposal. PRoot runs under the app UID and is not a kernel-level security boundary. Any future executor must require explicit user approval by default.
