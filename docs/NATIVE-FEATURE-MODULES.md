@@ -308,19 +308,80 @@ of pretending to work.
 
 ---
 
-## 12. MCP and Deep Research
+## 12. MCP
 
 | | |
 |---|---|
-| Reference source | The feature list of the reference product |
-| Native implementation | nothing yet |
-| Status | `planned` |
+| Reference source | The feature list of the reference product (MCP); the reference PoC had no MCP at all |
+| Native implementation | `SdsMcpConfigStore`, `SdsMcpClient`, `SdsMcpTools`, the MCP card in `SdsAgentConsoleActivity`, the strict JSON layer `SdsJson` and `SdsJsonWriter` |
+| Status | `static-verified`, `build-verified` |
 
-Both need a network transport, and the network ban of this project is on by
-default. The plan is a JSON-RPC client that only talks to servers the user
-entered, a per call approval and a switch that removes the server from the
-allow-list again. Nothing is implemented yet, and nothing in this repository
-claims otherwise.
+**Why.** The reference product used a browser fetch bridge. A bridge that the
+page can call is exactly the kind of thing this project refuses, so the client
+is native: it speaks JSON-RPC 2.0 over HTTPS to a server the user entered by
+hand.
+
+**Safety.** The network switch in the console is off by default and the
+executor refuses every tool that needs the network while it is off. Every
+call of a server tool needs its own approval and the tools are not read-only.
+The address has to use https, the answer is bounded and it is parsed with the
+strict reader, so a broken or hostile answer is refused instead of being used.
+The token of a server stays in the app-private directory and is never written
+into a log, a timeline entry or a diagnostic. A server that the user just
+entered is switched off until the user turns it on, and turning it off removes
+its tools from the allow-list.
+
+**Rollback.** Deleting the server removes its tools from the allow-list and
+its token from the device.
+
+**Tests.** The strict reader and its writer, the refused documents, the
+server list, the refused plain http address, the duplicate server, the read
+back after a restart and the prefixed name of a server tool are covered. The
+transport itself needs a server, so it is build-verified only.
+
+---
+
+## 13. Deep Research
+
+| | |
+|---|---|
+| Reference source | The feature list of the reference product (Deep Research); the retrieval is new in this project |
+| Native implementation | `SdsHttpFetcher`, `SdsResearchTools` (`research.fetch`), the Deep Research card in `SdsAgentConsoleActivity` |
+| Status | `static-verified`, `build-verified` |
+
+**Why.** The reference product retrieved with a browser bridge and wrote the
+answer itself. The port splits the two: the app retrieves the text and the
+model writes the synthesis, so the app never invents an answer.
+
+**Safety.** The same two gates as MCP: the network switch and the explicit
+approval for every fetch, and the executor refuses the tool while the network
+is off. Only https is allowed, a redirect is never followed, so a server
+cannot move the request to another host, and the answer is bounded and reduced
+to plain text, so a page can never inject a view, a script or a command.
+
+**Rollback.** The tool is only reachable through the allow-list and the
+network switch removes its effect.
+
+**Tests.** The refusal of a network tool while the network is off and the
+plain text extraction, which proves that the markup, the scripts and the
+styles are removed, are covered.
+
+---
+
+## 14. Advanced settings and the advertisement bar
+
+**Advanced settings** are implemented as the switches of the console: the tool
+proposal mode, the network switch, the switch that adds the memories to every
+prompt and the switch of the Linux Studio. Each of them changes one thing and
+each of them is off by default.
+
+**The advertisement bar of the reference product is deliberately not ported.**
+It is a foreign advertisement surface inside the chat of the official app: it
+would inject content that the user of the official app never asked for, it
+would need a network call and a tracking identifier on every screen, and it
+conflicts with the rule that no foreign content may enter the native surface.
+This is the one capability of the reference list that is not ported on
+purpose, and it is written down here so that the decision is visible.
 
 ---
 

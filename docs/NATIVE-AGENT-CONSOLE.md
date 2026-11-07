@@ -54,8 +54,11 @@ placement and the touch behaviour on a device are still unproven.
 - The list shows every registered tool with its description and its exact
   argument schema, and marks the read-only ones. Only these tools can run.
 - The list holds `workspace.list`, `workspace.read`, `workspace.write`,
-  `artifact.create`, `artifact.list`, `artifact.read` and `ui.render`.
+  `artifact.create`, `artifact.list`, `artifact.read`, `ui.render` and
+  `research.fetch`.
 - `sandbox.run` only appears while the Linux Studio switch is on.
+- The tools of an MCP server appear under `mcp.<server>.<tool>` while the
+  server is switched on.
 
 **Observer diagnostics**
 
@@ -117,6 +120,27 @@ placement and the touch behaviour on a device are still unproven.
 - The action copies its argument to the clipboard. Nothing is executed and
   nothing is loaded from the network.
 
+**MCP servers**
+
+- Add a server with its name, its https address and an optional token. The
+  token stays in the app-private directory and is never written into a log, a
+  timeline entry or a diagnostic.
+- A server that was just added is switched off. Switch it on to let its tools
+  join the allow-list, and switch it off to remove them again.
+- Ask the servers for their tools lists the tools of the enabled servers. The
+  request needs the network.
+- The network switch allows the agent to use the network. It is off by
+  default, and while it is off the executor refuses every tool that needs the
+  network.
+
+**Deep Research**
+
+- The address field fetches one address. Only https is allowed and the fetch
+  needs the network switch and an approval that shows the exact address.
+- The answer is reduced to plain text, so a page can never inject a view, a
+  script or a command. The synthesis is written by the model in the chat, the
+  app never invents an answer.
+
 **Linux Studio**
 
 - The card states whether the PRoot runtime is bundled and whether the root
@@ -158,10 +182,13 @@ touches:
 | `artifact.read` | the app-private artifact store | read-only |
 | `artifact.create` | the app-private artifact store | always |
 | `ui.render` | the console surface only | read-only |
+| `research.fetch` | one https address | always, and the network |
+| `mcp.<server>.<tool>` | one MCP server the user entered | always, and the network |
 | `sandbox.run` | the PRoot runtime, only while the switch is on | always |
 
-There is no arbitrary command execution outside the Linux Studio, no network
-tool and no access outside the workspace. Every path is resolved with a
+There is no arbitrary command execution outside the Linux Studio and no access
+outside the workspace. The two network tools exist, but they need the network
+switch that is off by default, and every single call needs its own approval. Every path is resolved with a
 canonical-path check, and an argument that the tool does not declare is
 refused.
 
@@ -196,6 +223,9 @@ before any code of the tool is reached.
 | The root filesystem checksum does not match | The root filesystem is not accepted and the studio is not ready |
 | The system file picker cannot be opened | The export shows a message and nothing is written |
 | An unknown slash command is typed | The prompt is sent unchanged, nothing is dropped |
+| The network is off | The executor refuses every tool that needs the network |
+| The MCP server is not reachable | The tool returns a failed result and the token never appears in the message |
+| The address answers with an error | The fetch reports the status and no text is shown |
 
 ## Tests
 
@@ -205,4 +235,6 @@ before any code of the tool is reached.
 The regression test covers the session, the allow-list, the strict arguments,
 the workspace confinement, the memory store, the project registry, the slash
 commands, the prompt expansion, the artifact store and tools, the Generative
-UI specification and the state of the Linux Studio.
+UI specification, the state of the Linux Studio, the strict JSON reader and
+its writer, the MCP server list and the refusal of a network tool while the
+network is off.
