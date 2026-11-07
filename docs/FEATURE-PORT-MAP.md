@@ -4,8 +4,8 @@ The Super DeepSeek repository is the product and UX reference. Its web implement
 
 | Reference capability | Web implementation concept | Native port target | Current state |
 |---|---|---|---|
-| AI Agent | sd-agent.js, prompt and tool loop | DEX request hook + SSE ResponseFragment observer + AgentController | Prompt and streaming SET/APPEND hooks statically traced and implemented; proposal queue only; no executor or result handoff |
-| Tool review | tool cards and ask/approve UI | Android Activity proposal console | Implemented as a separate launcher Activity; review/copy/dismiss only, no execution |
+| AI Agent | sd-agent.js, prompt and tool loop | DEX request hook + SSE ResponseFragment observer + AgentController | Prompt and streaming SET/APPEND hooks implemented and patch-verified; session state machine with approve, deny and stop; approval-gated executor for the private workspace; no result handoff yet |
+| Tool review | tool cards and ask/approve UI | Android Activity proposal console | Implemented as a separate launcher Activity; review, approve, deny, stop, copy and dismiss; only allow-listed tools can run |
 | Linux Studio | browser terminal and file workspace | Native Activity + app-private sandbox runtime | Planned; security and lifecycle work required |
 | MCP | sd-genui-mcp.js and browser fetch bridge | Native MCP client with transport, consent and credential store | Planned |
 | Generative UI | sd-genui modules, HTML/CSS renderer | Schema-validated Compose renderer and native artifact viewer | Planned |
@@ -14,11 +14,11 @@ The Super DeepSeek repository is the product and UX reference. Its web implement
 | Slash commands | web composer popup | Compose command palette and send-pipeline integration | Planned |
 | Projects | browser project/file drawer | Native project workspace and Android document picker | Planned |
 | Deep Research | multi-step web retrieval | Native research orchestrator with source provenance and cancellation | Planned |
-| File tools | browser bridge and sandbox files | ContentResolver/document provider + sandbox workspace adapter | Planned |
+| File tools | browser bridge and sandbox files | ContentResolver/document provider + sandbox workspace adapter | Workspace list, read and write implemented behind the allow-list with canonical-path confinement; document provider still planned |
 | Artifacts | generated cards and preview panel | Native artifact registry, viewer, version history and sharing | Planned |
 | Export / backup | browser export helpers | Android share sheet, SAF and backup/restore format | Planned |
-| Activity timeline | sd-run.js run cards and steps | Native agent event log and stoppable task UI | Planned |
-| Diagnostics | page-contract probes | Version-specific app contract checks and safe diagnostic export | Planned |
+| Activity timeline | sd-run.js run cards and steps | Native agent event log and stoppable task UI | Native timeline of approve, deny, stop and run events implemented and shown in the console; the official chat itself is not stoppable yet |
+| Diagnostics | page-contract probes | Version-specific app contract checks and safe diagnostic export | Observer metrics implemented without storing content; app contract checks and export still planned |
 
 ## Streaming response trace
 
