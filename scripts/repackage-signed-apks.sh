@@ -82,7 +82,7 @@ sign_one() {
     --ks-pass env:SDS_KEYSTORE_PASSWORD --key-pass env:SDS_KEY_PASSWORD \
     --out "$output" "$aligned"
   "$APKSIGNER" verify --min-sdk-version 32 --verbose "$output" >/dev/null
-  "$APKSIGNER" verify --print-certs "$output" |
+  "$APKSIGNER" verify --min-sdk-version 32 --print-certs "$output" |
     awk -F': ' '/Signer #1 certificate SHA-256 digest:/ {print tolower($2); exit}'
 }
 sign_one "$PATCHED_BASE" base.apk > "$WORK/signed/base.cert"
@@ -94,7 +94,7 @@ CERT="$(cat "$WORK/signed/base.cert")"
 [[ "$CERT" =~ ^[0-9a-f]{64}$ ]] || { echo "invalid base signer digest" >&2; exit 1; }
 for signed in "$WORK/signed"/*.apk; do
   "$APKSIGNER" verify --min-sdk-version 32 --verbose "$signed" >/dev/null
-  cert="$("$APKSIGNER" verify --print-certs "$signed" | awk -F': ' '/Signer #1 certificate SHA-256 digest:/ {print tolower($2); exit}')"
+  cert="$("$APKSIGNER" verify --min-sdk-version 32 --print-certs "$signed" | awk -F': ' '/Signer #1 certificate SHA-256 digest:/ {print tolower($2); exit}')"
   [[ "$cert" == "$CERT" ]] || { echo "signer mismatch: $(basename "$signed")" >&2; exit 1; }
   badging="$("$AAPT" dump badging "$signed")"
   grep -q "package: name='com.deepseek.chat' versionCode='296'" <<<"$badging"
