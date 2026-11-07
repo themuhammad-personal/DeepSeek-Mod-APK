@@ -50,7 +50,7 @@ code, so the apply is performed against the reconstructed 293 target only.
 
 ## 2. What the CI run does
 
-`.github/workflows/verify-pinned-apk-patches.yml`, run `42336140275`, commit `ec387ec`:
+`.github/workflows/verify-pinned-apk-patches.yml`, run `42336409045`, commit `e524487`:
 
 1. resolve the hash-pinned source bundle;
 2. download it over HTTPS and compare its SHA-256 with the pinned value;
@@ -66,6 +66,20 @@ code, so the apply is performed against the reconstructed 293 target only.
 11. delete the temporary third-party and patched APKs.
 
 All nineteen steps of that run are **green**.
+
+### 2.0 Artifact and hash evidence of that run
+
+| Item | Value |
+| --- | --- |
+| patch bundle artifact | `deepseek-morphe-patches`, 709,307 bytes, `sha256:dc16e4bbe3acef0cb77cc189561562323e6dea911421ec2626a97e56dc426785` (run `42336409036`) |
+| source bundle SHA-256 | `b0ec418ec9b8a273479acd8fed73acefbdbddd34162684c50e1737abb70d74de` |
+| rebuilt target SHA-256 | `b4bd2251637879b3c192ad37ff2905910c7c97da192c4bc56fd782d93b01b930` |
+| patched APK SHA-256 | `50aecf0b093e81797a2fe3370cd084afbdccc232ae46438bfd4be4ffab0077a3` |
+| patched APK size | 31,175,885 bytes |
+
+The rebuilt target differs from the locally rebuilt file only because CI additionally runs
+`zipalign` on it. The patched APK is **not** published anywhere: it is deleted in the last step
+of the run.
 
 ### 2.1 The apply
 
@@ -102,12 +116,15 @@ that the original code just wrote**:
   `Lly1;->c:Ljava/lang/String;` into a register and passes exactly that register to
   `SdsAgentHooks.beforePrompt(String)`, and the returned value is moved back into the same
   register, so the guarded prompt is the one that is sent.
+  *Verified in the patched DEX: `beforePrompt receives the prompt register v8`.*
 * **Streaming SET hook** — `Lv44;->l(Ljava/lang/String;Lc26;Lgv1;)V` passes the register that
   carries the replacement content into `Ldea;->j(Object)` to `SdsAgentHooks.observeResponse(String)`.
+  *Verified in the patched DEX: `observeResponse receives the SET content register v3`.*
 * **Streaming APPEND hook** — `Lv44;->m(Lc26;Ljava/lang/String;)V` passes the register that
   carries the **complete accumulated** content into `Ldea;->m(Object,Object)` to
   `SdsAgentHooks.observeResponse(String)`, and that register is proven to be the one produced by
   `StringBuilder.toString()`, so the observer sees the whole accumulated answer and not a chunk.
+  *Verified in the patched DEX: `observeResponse receives the accumulated content register v4`.*
 
 ### 2.4 Why the SDK verifier is not enabled for the apply
 
@@ -174,7 +191,7 @@ pre-existing set of the target.
 ## 5. Reproducing the run
 
 ```bash
-gh run view 42336140275 --repo themuhammad-personal/DeepSeek-Mod-APK
+gh run view 42336409045 --repo themuhammad-personal/DeepSeek-Mod-APK
 ```
 
 The run needs the hash-pinned source location, which is read from `.github/pinned-source.env`.
