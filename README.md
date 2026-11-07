@@ -84,3 +84,4 @@ The verification workflow deletes the temporary APKs after checking them and doe
 - docs/SECURITY-BOUNDARIES.md
 - docs/VERIFICATION.md
 - docs/P0-VERIFICATION.md
+- docs/FINAL-REVIEW.md
