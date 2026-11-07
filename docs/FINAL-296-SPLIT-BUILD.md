@@ -1,101 +1,59 @@
-# Final build — DeepSeek 2.7.5 / versionCode 296
+# Final build — exact owner-provided single APK
 
-Base branch: `arena/8bb57a23-deepseek-mod-apk`  
-Base commit: `f1d2da85bc3ae77ce657dc8771b82a69ed674528`  
-Final branch: `final/2.7.5-296-split-apk`
+Final branch: `final/2.7.5-296-split-apk`  
+Source: the Google Drive file ID explicitly supplied by the owner: `1r4__RT5nFRmkfxHuK4sLWgGeNXGKbS3o`.
 
-This branch starts from the newest arena commit and keeps its latest feature work, fixes and 296 inspection. It adds a workflow for the exact Play Store split package supplied in this conversation.
+## Input restriction
 
-## Source archive verified
+The build workflow downloads **only that single Drive APK**. It does not use the earlier chat-uploaded APKS archive, any alternate APK, an APKMirror package, an extracted APK from another source, or any source APK committed to the repository.
 
-Uploaded file: `DeepSeek_2.7.5.apks`
+The Drive link is converted to a direct download URL within GitHub Actions. The runner validates that the response is an APK (ZIP with AndroidManifest.xml), then checks:
+- package: `com.deepseek.chat`
+- version name: `2.7.5`
+- version code: `296`
+- no split attribute (the workflow accepts one standalone APK only).
 
-- Archive SHA-256: `02e6dafdb37fb2be754d4dfd428d2cb9767a610f4de1fa30bce21f11dc14cd8c`
-- Members: `base.apk`, `split_config.arm64_v8a.apk`, `split_config.xhdpi.apk`
-- Base SHA-256: `6befd98c06155b2b4583f57cd76d7b721e342fed77025a94b653e03e18b5c8a8`
-- ARM64 split SHA-256: `4f9bbc031c799450cee4100687514e4b1dae8d082816f823840fdd2cd3344051`
-- xhdpi split SHA-256: `3b7ce2d70fe06334bd533c04ef6d1f97a1a0d741a17eef230985a241c9b5cb7a`
+If Drive does not permit anonymous download, if the URL returns an HTML confirmation/error page, or if the linked APK is a split rather than a standalone APK, the job stops. It does not fall back to a different APK.
 
-The base hash matches the versionCode 296 base APK recorded in the arena branch. This is the exact target: package `com.deepseek.chat`, version `2.7.5`, versionCode `296`. It requires Android API 32 or newer.
+After downloading, the build verifies the version-296 fingerprint set against this exact APK. A fingerprint mismatch stops patching, which prevents accidental application of another build's offsets or method names.
 
-The separately rebuilt APK you mentioned is not needed as an input: the original archive contains all three matching Play Store splits, and its base matches the recorded 296 source.
+## Build process
 
-## Why the output is an APKS set
+1. Download the exact file ID supplied by the owner.
+2. Verify APK container, package, version and standalone status.
+3. Verify the build-296 fingerprints.
+4. Build the Morphe patch bundle from this repository branch.
+5. Apply the four existing native patches to that one APK.
+6. Run hook-site, login-untouched, native-only and DEX verification.
+7. Re-sign the patched APK with an owner-controlled key, or create a temporary key if secrets are absent.
+8. Upload only the patched APK and its SHA-256 checksum as the Actions artifact.
 
-Returning only the patched `base.apk` would omit the ARM64 native-library and xhdpi configuration splits. The new workflow therefore:
-1. verifies the outer archive hash and all three inner APK hashes;
-2. checks package/version metadata for each APK;
-3. verifies the 296 fingerprints against base.apk;
-4. builds the Morphe bundle and applies all four native patches to base.apk;
-5. runs hook-site, login-untouched and native-only static checks;
-6. re-signs the patched base and both configuration splits with one certificate;
-7. repackages the three APKs into a new `.apks` file and verifies the signer matches across the set.
-
-The original Play signing certificate cannot be preserved after modifying the app. All APKs in the output set receive the same owner-controlled signature.
-
-## Configure the source and start the GitHub Actions build
-
-The workflow starts on a push to `final/2.7.5-296-split-apk`. The uploaded chat attachment is not directly accessible to GitHub-hosted runners, so the exact same `.apks` archive must be placed at an HTTPS URL that allows direct download.
-
-1. Upload `DeepSeek_2.7.5.apks` to an owner-controlled host such as Google Drive.
-2. Set its sharing access to **Anyone with the link**.
-3. Use a direct-download URL. For Google Drive, use the file ID in `https://drive.google.com/uc?export=download&id=FILE_ID`.
-4. In GitHub open **Settings → Secrets and variables → Actions → Variables → New repository variable**.
-5. Create the variable `SDS_296_SOURCE_URL` and set it to the direct-download URL.
-
-The expected outer SHA-256 is pinned inside the workflow:
-`02e6dafdb37fb2be754d4dfd428d2cb9767a610f4de1fa30bce21f11dc14cd8c`.
-The build also checks all three inner APK hashes. A changed archive or split APK is rejected.
-
-The build job is intentionally skipped while `SDS_296_SOURCE_URL` is absent. After you save the variable, tell the maintainer that it is ready; a small commit to this branch will trigger the APK build automatically. Do not put a private access token or signing key in the URL.
-
-## Critical compatibility limit: Google Play Integrity
-
-DeepSeek's "To continue using DeepSeek, get it on Google Play" screen is consistent with the Play Integrity remediation flow. A public Aurora Store report reproduces that exact DeepSeek message; the Aurora maintainer attributed it to the app developer's Play Integrity check:
-https://gitlab.com/AuroraOSS/AuroraStore/-/work_items/1352
-
-Google's official documentation distinguishes:
-- `appLicensingVerdict = UNLICENSED`: the account does not have a Play entitlement, which can happen with a sideloaded copy.
-- `appRecognitionVerdict = UNRECOGNIZED_VERSION`: the app binary or signing certificate is not recognized as the Play-distributed build.
-- The `GET_LICENSED` remediation dialog is specifically intended to direct users to the genuine Play-distributed app when these verdicts occur.
-
-References:
-- https://developer.android.com/google/play/integrity/verdicts
-- https://developer.android.com/google/play/integrity/remediation
-
-This project re-signs the modified base APK and all of its splits with an owner-controlled certificate. That certificate is not DeepSeek's Google Play App Signing certificate. Therefore a successful build, valid APK signatures, and passing static checks do **not** establish that DeepSeek will accept the modified app at runtime. The app may still show the Play Store screen or reject requests.
-
-The project must not disable, forge, spoof, or bypass DeepSeek's Play Integrity, app-licensing, anti-fraud, session, or certificate checks. Do not describe the resulting APK as ready for normal use until DeepSeek provides an authorized testing/distribution path or explicitly recognizes the modified signing identity. A separate companion app that does not modify DeepSeek's package is the safer independent development route.
+The original Play signing certificate cannot be kept after modifying the APK. The patched APK therefore cannot update the official Play Store installation in place.
 
 ## Persistent signing key
 
-To install future builds as updates without uninstalling the current modified app, configure these Actions secrets **before the first installation**:
+For repeatable updates, set these GitHub Actions secrets before installing the first modified build:
 - `SDS_SIGNING_KEY_BASE64`
 - `SDS_KEYSTORE_PASSWORD`
 - `SDS_KEY_PASSWORD`
 - `SDS_KEY_ALIAS`
 
-Generate a JKS key on a trusted computer with Java:
+Generate a JKS on a trusted computer:
 ```bash
-keytool -genkeypair -v -keystore deepseek-mod-release.jks \\
-  -storetype JKS -alias deepseek-mod \\
+keytool -genkeypair -v -keystore deepseek-mod-release.jks \
+  -storetype JKS -alias deepseek-mod \
   -keyalg RSA -keysize 3072 -validity 10000
 base64 -w 0 deepseek-mod-release.jks > deepseek-mod-release.base64.txt
 ```
 
-Keep the key and passwords private; never commit them. If these secrets are absent, the workflow creates a temporary one-run key. That build installs, but a later different key cannot update it and Android may require uninstalling the previous modified app, which can remove local app data.
+Never commit the keystore or its passwords. Without these secrets the workflow uses a temporary one-run key; another build will have a different signature and cannot update the installed copy.
 
-## Download and install
+## Output and installation
 
-A successful run uploads artifact `deepseek-mod-2.7.5-296-apks`. Download it from the Actions run's **Artifacts** section and extract:
-- `deepseek-mod-2.7.5-296.apks`
-- `deepseek-mod-2.7.5-296.apks.sha256`
+A successful run publishes artifact `deepseek-mod-2.7.5-296-apk`, containing:
+- `deepseek-mod-2.7.5-296.apk`
+- `deepseek-mod-2.7.5-296.apk.sha256`
 
-Install the split set with SAI (Split APKs Installer), or with Android platform tools:
-```bash
-adb install-multiple -r base.apk split_config.arm64_v8a.apk split_config.xhdpi.apk
-```
+Install the APK normally. Back up app data before uninstalling the official Play Store version, because the signing certificate changes.
 
-Because the APKs are re-signed with an owner key, they cannot update the official Play Store app in place. Back up important data before removing the official app. The static checks are not a substitute for first-launch, sign-in, chat-streaming and Agent device tests.
-
-The repository is public, so the workflow artifact is downloadable by repository readers while retained (seven days). No original APK or signing key is committed to the repository.
+Static checks do not prove device runtime behaviour. First launch, sign-in, chat streaming and Agent interactions still need physical-device testing.
