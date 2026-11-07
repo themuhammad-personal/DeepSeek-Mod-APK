@@ -38,6 +38,11 @@ public final class SdsChatEntry {
     public static void attach(Activity activity) {
         if (activity == null || activity.isFinishing()) return;
         try {
+            SdsAppContext.initialize(activity.getApplicationContext());
+        } catch (Throwable ignored) {
+            // The runtime stays inactive when it cannot be prepared.
+        }
+        try {
             activity.runOnUiThread(new Runnable() {
                 @Override
                 public void run() {

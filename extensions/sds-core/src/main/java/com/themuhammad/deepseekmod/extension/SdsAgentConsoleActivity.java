@@ -12,6 +12,7 @@ import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.Switch;
@@ -43,11 +44,17 @@ public final class SdsAgentConsoleActivity extends Activity {
     private LinearLayout proposalList;
     private LinearLayout timelineList;
     private LinearLayout toolList;
+    private LinearLayout memoryList;
+    private LinearLayout projectList;
+    private LinearLayout commandList;
     private TextView queueStatus;
     private TextView sessionStatus;
     private TextView diagnosticsStatus;
     private TextView resultStatus;
     private Switch proposalMode;
+    private Switch includeMemory;
+    private EditText memoryInput;
+    private EditText projectInput;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -55,6 +62,7 @@ public final class SdsAgentConsoleActivity extends Activity {
         File workspace = new File(getFilesDir(), "workspace");
         //noinspection ResultOfMethodCallIgnored
         workspace.mkdirs();
+        SdsAppContext.initialize(getApplicationContext());
         registry = SdsWorkspaceTools.createRegistry();
         executor = new SdsToolExecutor(registry, SdsExecutionPolicy.SAFE_DEFAULT);
         buildScreen();
@@ -167,6 +175,89 @@ public final class SdsAgentConsoleActivity extends Activity {
         addGap(root, 12);
         root.addView(toolsCard, matchWrap());
 
+        LinearLayout memoryCard = card();
+        memoryCard.addView(text("Memories", 16, TEXT, true), matchWrap());
+        TextView memoryNote = text(
+                "App-private notes. They are added to a prompt only when you ask for /memory "
+                        + "or turn the switch on.", 11, MUTED, false);
+        LinearLayout.LayoutParams memoryNoteParams = matchWrap();
+        memoryNoteParams.topMargin = dp(4);
+        memoryCard.addView(memoryNote, memoryNoteParams);
+        includeMemory = new Switch(this);
+        includeMemory.setText("Add the memories to every prompt");
+        includeMemory.setTextColor(TEXT);
+        includeMemory.setTextSize(13);
+        includeMemory.setChecked(SdsRuntimeRegistry.isIncludeMemoryInPrompt());
+        includeMemory.setOnCheckedChangeListener((button, checked) ->
+                SdsRuntimeRegistry.setIncludeMemoryInPrompt(checked));
+        LinearLayout.LayoutParams includeMemoryParams = matchWrap();
+        includeMemoryParams.topMargin = dp(6);
+        memoryCard.addView(includeMemory, includeMemoryParams);
+        memoryInput = new EditText(this);
+        memoryInput.setHint("key = note");
+        memoryInput.setTextColor(TEXT);
+        memoryInput.setHintTextColor(MUTED);
+        memoryInput.setTextSize(13);
+        LinearLayout.LayoutParams memoryInputParams = matchWrap();
+        memoryInputParams.topMargin = dp(6);
+        memoryCard.addView(memoryInput, memoryInputParams);
+        Button addMemory = button("Add memory");
+        addMemory.setOnClickListener(v -> onAddMemory());
+        LinearLayout.LayoutParams addMemoryParams = wrapWrap();
+        addMemoryParams.topMargin = dp(6);
+        memoryCard.addView(addMemory, addMemoryParams);
+        memoryList = new LinearLayout(this);
+        memoryList.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams memoryListParams = matchWrap();
+        memoryListParams.topMargin = dp(6);
+        memoryCard.addView(memoryList, memoryListParams);
+        addGap(root, 12);
+        root.addView(memoryCard, matchWrap());
+
+        LinearLayout projectCard = card();
+        projectCard.addView(text("Projects", 16, TEXT, true), matchWrap());
+        TextView projectNote = text(
+                "A project is a named folder in the private workspace.", 11, MUTED, false);
+        LinearLayout.LayoutParams projectNoteParams = matchWrap();
+        projectNoteParams.topMargin = dp(4);
+        projectCard.addView(projectNote, projectNoteParams);
+        projectInput = new EditText(this);
+        projectInput.setHint("project name");
+        projectInput.setTextColor(TEXT);
+        projectInput.setHintTextColor(MUTED);
+        projectInput.setTextSize(13);
+        LinearLayout.LayoutParams projectInputParams = matchWrap();
+        projectInputParams.topMargin = dp(6);
+        projectCard.addView(projectInput, projectInputParams);
+        Button addProject = button("Create project");
+        addProject.setOnClickListener(v -> onCreateProject());
+        LinearLayout.LayoutParams addProjectParams = wrapWrap();
+        addProjectParams.topMargin = dp(6);
+        projectCard.addView(addProject, addProjectParams);
+        projectList = new LinearLayout(this);
+        projectList.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams projectListParams = matchWrap();
+        projectListParams.topMargin = dp(6);
+        projectCard.addView(projectList, projectListParams);
+        addGap(root, 12);
+        root.addView(projectCard, matchWrap());
+
+        LinearLayout commandCard = card();
+        commandCard.addView(text("Slash commands", 16, TEXT, true), matchWrap());
+        TextView commandNote = text(
+                "Type a command at the start of a chat message. It is expanded natively before the prompt is sent.",
+                11, MUTED, false);
+        LinearLayout.LayoutParams commandNoteParams = matchWrap();
+        commandNoteParams.topMargin = dp(4);
+        commandCard.addView(commandNote, commandNoteParams);
+        commandList = new LinearLayout(this);
+        commandList.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams commandListParams = matchWrap();
+        commandListParams.topMargin = dp(6);
+        commandCard.addView(commandList, commandListParams);
+        addGap(root, 12);
+        root.addView(commandCard, matchWrap());
+
         LinearLayout controls = new LinearLayout(this);
         controls.setOrientation(LinearLayout.HORIZONTAL);
         controls.setGravity(Gravity.CENTER_VERTICAL);
@@ -218,6 +309,114 @@ public final class SdsAgentConsoleActivity extends Activity {
         refreshDiagnostics();
         refreshTimeline();
         refreshTools();
+        refreshMemories();
+        refreshProjects();
+        refreshCommands();
+    }
+
+    private void onAddMemory() {
+        SdsMemoryStore store = SdsRuntimeRegistry.getMemoryStore();
+        if (store == null) {
+            Toast.makeText(this, "The memory store is not ready", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        String input = memoryInput == null ? "" : memoryInput.getText().toString().trim();
+        int separator = input.indexOf('=');
+        if (separator <= 0) {
+            Toast.makeText(this, "Use the form key = note", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        try {
+            store.put(input.substring(0, separator).trim(), input.substring(separator + 1).trim());
+            if (memoryInput != null) memoryInput.setText("");
+            refresh();
+        } catch (IllegalArgumentException | IllegalStateException refused) {
+            Toast.makeText(this, String.valueOf(refused.getMessage()), Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void onCreateProject() {
+        SdsProjectRegistry registry = SdsRuntimeRegistry.getProjectRegistry();
+        if (registry == null) {
+            Toast.makeText(this, "The project registry is not ready", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        String name = projectInput == null ? "" : projectInput.getText().toString().trim();
+        if (name.isEmpty()) {
+            Toast.makeText(this, "The project name is required", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        try {
+            registry.create(name);
+            if (projectInput != null) projectInput.setText("");
+            refresh();
+        } catch (IllegalArgumentException | IllegalStateException refused) {
+            Toast.makeText(this, String.valueOf(refused.getMessage()), Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void refreshMemories() {
+        if (memoryList == null) return;
+        memoryList.removeAllViews();
+        SdsMemoryStore store = SdsRuntimeRegistry.getMemoryStore();
+        if (store == null || store.size() == 0) {
+            memoryList.addView(text("No memories yet.", 13, MUTED, false), matchWrap());
+            return;
+        }
+        for (java.util.Map.Entry<String, String> entry : store.snapshot().entrySet()) {
+            LinearLayout row = new LinearLayout(this);
+            row.setGravity(Gravity.CENTER_VERTICAL);
+            TextView value = text(entry.getKey() + ": " + entry.getValue(), 12, TEXT, false);
+            row.addView(value, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+            Button delete = button("Delete");
+            delete.setOnClickListener(v -> {
+                SdsMemoryStore current = SdsRuntimeRegistry.getMemoryStore();
+                if (current != null) current.remove(entry.getKey());
+                refresh();
+            });
+            row.addView(delete, wrapWrap());
+            LinearLayout.LayoutParams rowParams = matchWrap();
+            rowParams.topMargin = dp(4);
+            memoryList.addView(row, rowParams);
+        }
+    }
+
+    private void refreshProjects() {
+        if (projectList == null) return;
+        projectList.removeAllViews();
+        SdsProjectRegistry registry = SdsRuntimeRegistry.getProjectRegistry();
+        if (registry == null || registry.size() == 0) {
+            projectList.addView(text("No projects yet.", 13, MUTED, false), matchWrap());
+            return;
+        }
+        for (SdsProjectRegistry.Project project : registry.snapshot()) {
+            LinearLayout row = new LinearLayout(this);
+            row.setGravity(Gravity.CENTER_VERTICAL);
+            TextView name = text(project.getName() + " (" + project.getFolder() + ")", 12, TEXT, false);
+            row.addView(name, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+            Button delete = button("Delete");
+            delete.setOnClickListener(v -> {
+                SdsProjectRegistry current = SdsRuntimeRegistry.getProjectRegistry();
+                if (current != null) current.remove(project.getName());
+                refresh();
+            });
+            row.addView(delete, wrapWrap());
+            LinearLayout.LayoutParams rowParams = matchWrap();
+            rowParams.topMargin = dp(4);
+            projectList.addView(row, rowParams);
+        }
+    }
+
+    private void refreshCommands() {
+        if (commandList == null) return;
+        commandList.removeAllViews();
+        for (String line : SdsSlashCommands.describe()) {
+            TextView view = text(line, 12, Color.rgb(203, 215, 232), false);
+            view.setTypeface(Typeface.MONOSPACE);
+            LinearLayout.LayoutParams params = matchWrap();
+            params.topMargin = dp(3);
+            commandList.addView(view, params);
+        }
     }
 
     private void refreshProposals() {

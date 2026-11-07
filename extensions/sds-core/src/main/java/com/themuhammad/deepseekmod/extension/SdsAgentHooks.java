@@ -27,10 +27,17 @@ public final class SdsAgentHooks {
 
     private SdsAgentHooks() { }
 
-    /** Called immediately before the inspected prompt field is serialized. */
+    /**
+     * Called immediately before the inspected prompt field is serialized.
+     *
+     * A slash command at the start of the prompt is expanded by the native
+     * command registry, and the stored memories are added when the user turned
+     * that on. Nothing else about the prompt is changed.
+     */
     public static String beforePrompt(String prompt) {
         if (!enabled) return prompt;
-        return (prompt == null ? "" : prompt) + TOOL_GUIDANCE;
+        String expanded = SdsSlashCommands.expand(prompt == null ? "" : prompt);
+        return expanded + TOOL_GUIDANCE + SdsRuntimeRegistry.memoryPromptBlock();
     }
 
     /**

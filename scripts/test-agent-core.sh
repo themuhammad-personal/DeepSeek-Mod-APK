@@ -23,6 +23,10 @@ javac -encoding UTF-8 -d "$TMP/classes" \
   "$SRC/SdsToolRegistry.java" \
   "$SRC/SdsToolExecutor.java" \
   "$SRC/SdsWorkspaceTools.java" \
+  "$SRC/SdsMemoryStore.java" \
+  "$SRC/SdsProjectRegistry.java" \
+  "$SRC/SdsSlashCommands.java" \
+  "$SRC/SdsRuntimeRegistry.java" \
   "$SRC/SdsAgentHooks.java"
 javac -encoding UTF-8 -cp "$TMP/classes" -d "$TMP/classes" "$TEST"
 java -cp "$TMP/classes" com.themuhammad.deepseekmod.extension.SdsAgentCoreSelfTest

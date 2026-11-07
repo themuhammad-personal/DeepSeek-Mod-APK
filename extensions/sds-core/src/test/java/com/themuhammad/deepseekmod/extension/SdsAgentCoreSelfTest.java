@@ -25,6 +25,10 @@ public final class SdsAgentCoreSelfTest {
         testExecutorRefusesNetworkTool();
         testExecutorTimeoutAndCancel();
         testWorkspaceToolsStayInsideTheWorkspace();
+        testMemoryStore();
+        testProjectRegistry();
+        testSlashCommands();
+        testPromptExpansion();
         System.out.println("SDS agent-core self-test: PASS (" + checks + " checks)");
     }
 
@@ -365,5 +369,109 @@ public final class SdsAgentCoreSelfTest {
     private static void check(boolean condition, String message) {
         checks++;
         if (!condition) throw new AssertionError(message);
+    }
+
+    private static void testMemoryStore() throws Exception {
+        File parent = Files.createTempDirectory("sds-memory-test").toFile();
+        File file = new File(parent, "memory.txt");
+        SdsMemoryStore store = new SdsMemoryStore(file);
+        check(store.size() == 0, "a new memory store must be empty");
+        store.put("name", "the user's name");
+        store.put("plan", "build the native agent");
+        check(store.size() == 2, "two memories must be stored");
+        check("the user's name".equals(store.get("name")), "the memory must be readable");
+        check(store.get("missing") == null, "an unknown memory must be null");
+        check(store.remove("plan"), "a memory must be removable");
+        check(store.size() == 1, "the memory must be removed");
+
+        // The store has to survive a restart of the app.
+        SdsMemoryStore reopened = new SdsMemoryStore(file);
+        check(reopened.size() == 1, "the memory must survive a restart");
+        check("the user's name".equals(reopened.get("name")), "the memory content must survive a restart");
+
+        boolean rejected = false;
+        try { store.put("bad key", "value"); } catch (IllegalArgumentException expected) { rejected = true; }
+        check(rejected, "a memory key with an unsupported character must be rejected");
+        rejected = false;
+        try { store.put("", "value"); } catch (IllegalArgumentException expected) { rejected = true; }
+        check(rejected, "an empty memory key must be rejected");
+        rejected = false;
+        try {
+            StringBuilder oversized = new StringBuilder();
+            for (int index = 0; index < SdsMemoryStore.MAX_VALUE_CHARS + 1; index++) oversized.append('x');
+            store.put("big", oversized.toString());
+        } catch (IllegalArgumentException expected) { rejected = true; }
+        check(rejected, "an oversized memory value must be rejected");
+        reopened.clear();
+        check(reopened.size() == 0, "the memory store must be clearable");
+        deleteTree(parent);
+    }
+
+    private static void testProjectRegistry() throws Exception {
+        File parent = Files.createTempDirectory("sds-project-test").toFile();
+        File file = new File(parent, "projects.txt");
+        SdsProjectRegistry registry = new SdsProjectRegistry(file);
+        check(registry.size() == 0, "a new project registry must be empty");
+        SdsProjectRegistry.Project project = registry.create("My Project");
+        check("My Project".equals(project.getName()), "the project name must be kept");
+        check("project-my-project".equals(project.getFolder()), "the project folder must be derived");
+        check(registry.size() == 1, "the project must be stored");
+        boolean rejected = false;
+        try { registry.create("My Project"); } catch (IllegalStateException expected) { rejected = true; }
+        check(rejected, "a duplicate project must be rejected");
+        rejected = false;
+        try { registry.create("bad/name"); } catch (IllegalArgumentException expected) { rejected = true; }
+        check(rejected, "a project name with an unsupported character must be rejected");
+
+        SdsProjectRegistry reopened = new SdsProjectRegistry(file);
+        check(reopened.size() == 1, "the project must survive a restart");
+        check(reopened.remove("My Project"), "the project must be removable");
+        check(reopened.size() == 0, "the project must be gone");
+        deleteTree(parent);
+    }
+
+    private static void testSlashCommands() {
+        SdsRuntimeRegistry.ensureDefaults();
+        check(SdsRuntimeRegistry.commandNames().contains("/help"), "the help command must exist");
+        check(SdsRuntimeRegistry.commandNames().contains("/memory"), "the memory command must exist");
+        check(SdsRuntimeRegistry.commandNames().contains("/projects"), "the projects command must exist");
+        check(SdsSlashCommands.isCommand("/help"), "a slash command must be detected");
+        check(!SdsSlashCommands.isCommand("hello"), "a plain text must not be a command");
+        String expanded = SdsSlashCommands.expand("/help");
+        check(expanded.contains("/help"), "the help command must list the commands");
+        check("/unknown-command".equals(SdsSlashCommands.expand("/unknown-command")),
+                "an unknown command must leave the prompt untouched");
+        check("plain text".equals(SdsSlashCommands.expand("plain text")),
+                "a plain prompt must stay untouched");
+    }
+
+    private static void testPromptExpansion() throws Exception {
+        File parent = Files.createTempDirectory("sds-prompt-test").toFile();
+        File workspace = new File(parent, "workspace");
+        check(workspace.mkdirs(), "workspace create failed");
+        SdsRuntimeRegistry.setWorkspace(workspace);
+        SdsRuntimeRegistry.setMemoryStore(new SdsMemoryStore(new File(parent, "memory.txt")));
+        SdsRuntimeRegistry.setProjectRegistry(new SdsProjectRegistry(new File(parent, "projects.txt")));
+        SdsRuntimeRegistry.ensureDefaults();
+        SdsRuntimeRegistry.setIncludeMemoryInPrompt(false);
+
+        SdsAgentHooks.clearPendingCalls();
+        SdsAgentHooks.setEnabled(true);
+        String plain = SdsAgentHooks.beforePrompt("hello");
+        check(plain.startsWith("hello"), "a plain prompt must stay at the start");
+        check(plain.contains("SDS:TOOL_CALL"), "the tool guidance must be added");
+
+        String command = SdsAgentHooks.beforePrompt("/help");
+        check(command.contains("available slash commands"),
+                "a slash command must be expanded natively");
+
+        SdsRuntimeRegistry.getMemoryStore().put("language", "Bengali");
+        SdsRuntimeRegistry.setIncludeMemoryInPrompt(true);
+        String withMemory = SdsAgentHooks.beforePrompt("hello");
+        check(withMemory.contains("Stored memories:"), "the memories must be added when they are enabled");
+        check(withMemory.contains("Bengali"), "the memory content must be added");
+        SdsRuntimeRegistry.setIncludeMemoryInPrompt(false);
+        SdsAgentHooks.setEnabled(false);
+        deleteTree(parent);
     }
 }
