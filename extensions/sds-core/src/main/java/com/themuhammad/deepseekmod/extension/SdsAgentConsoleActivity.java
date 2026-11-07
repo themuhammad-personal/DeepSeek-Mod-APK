@@ -604,7 +604,7 @@ public final class SdsAgentConsoleActivity extends Activity {
             Toast.makeText(this, "Nothing was saved", Toast.LENGTH_SHORT).show();
             return;
         }
-        if (SdsExportService.writePending(data.getData())) {
+        if (SdsExportService.writePending(this, data.getData())) {
             Toast.makeText(this, "The file was saved", Toast.LENGTH_SHORT).show();
         } else {
             Toast.makeText(this, "The file could not be written", Toast.LENGTH_SHORT).show();

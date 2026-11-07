@@ -120,8 +120,8 @@ jobs:
           gradle --no-daemon buildAndroid > "$RUNNER_TEMP/gradle-build.log" 2>&1 || status=$?
           cat "$RUNNER_TEMP/gradle-build.log"
           if [[ "$status" -ne 0 ]]; then
-            grep -E "^e: |error:|FAILURE:|What went wrong|Caused by:|Execution failed" \
-              "$RUNNER_TEMP/gradle-build.log" | head -40 | while IFS= read -r line; do
+            awk '/error:|FAILURE:/{keep=4} keep>0 {gsub(/\r/,""); print; keep--}' \
+              "$RUNNER_TEMP/gradle-build.log" | head -36 | while IFS= read -r line; do
               printf '::error title=Morphe bundle build failed::%s\n' "${line//$'\r'/}"
             done
           fi

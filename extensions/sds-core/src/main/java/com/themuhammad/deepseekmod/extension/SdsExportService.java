@@ -1,6 +1,7 @@
 package com.themuhammad.deepseekmod.extension;
 
 import android.app.Activity;
+import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
 
@@ -71,14 +72,14 @@ public final class SdsExportService {
      *
      * @return true when the file was written.
      */
-    public static boolean writePending(Uri destination) {
+    public static boolean writePending(Context context, Uri destination) {
         String content = pendingContent;
         pendingContent = null;
         pendingName = null;
         if (destination == null || content == null) return false;
         java.io.OutputStream stream = null;
         try {
-            stream = destination.openOutputStream();
+            stream = context.getContentResolver().openOutputStream(destination);
             byte[] bytes = content.getBytes(java.nio.charset.Charset.forName("UTF-8"));
             stream.write(bytes);
             stream.flush();

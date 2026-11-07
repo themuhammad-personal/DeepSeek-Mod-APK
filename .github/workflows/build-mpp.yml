@@ -58,8 +58,10 @@ jobs:
           if [[ "$status" -ne 0 ]]; then
             # Surface the compiler or D8 error as a workflow annotation so that the
             # failure is readable without downloading the full run log.
-            grep -E "^e: |error:|FAILURE:|What went wrong|Caused by:|Execution failed" \
-              "$RUNNER_TEMP/gradle-build.log" | head -40 | while IFS= read -r line; do
+            # Each compiler error is followed by the lines that name the missing
+            # symbol and its location, so those lines are kept with the error.
+            awk '/error:|FAILURE:/{keep=4} keep>0 {gsub(/\r/,""); print; keep--}' \
+              "$RUNNER_TEMP/gradle-build.log" | head -36 | while IFS= read -r line; do
               printf '::error title=Morphe bundle build failed::%s\n' "${line//$'\r'/}"
             done
           fi
