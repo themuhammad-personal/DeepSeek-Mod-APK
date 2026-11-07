@@ -26,6 +26,9 @@ on:
         required: false
         type: string
         default: ""
+  repository_dispatch:
+    types:
+      - verify-pinned-apk
 
 permissions:
   contents: read
@@ -35,8 +38,8 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     env:
-      SOURCE_URL: ${{ inputs.source_url || vars.PINNED_SOURCE_URL }}
-      SOURCE_SHA256: ${{ inputs.source_sha256 || vars.PINNED_SOURCE_SHA256 }}
+      SOURCE_URL: ${{ inputs.source_url || github.event.client_payload.source_url }}
+      SOURCE_SHA256: ${{ inputs.source_sha256 || github.event.client_payload.source_sha256 }}
     steps:
       - name: Check out source
         uses: actions/checkout@v4
