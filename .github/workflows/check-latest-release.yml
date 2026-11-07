@@ -133,6 +133,11 @@ jobs:
             [[ -n "$line" ]] || continue
             printf '::warning title=The newest official DeepSeek release::%s\n' "${line//$'\r'/}"
           done
+          grep -E "^(promptSerializer|responseContentSet|responseContentAppend):" \
+            "$RUNNER_TEMP/latest-twins.log" 2>/dev/null | head -4 | while IFS= read -r line; do
+            [[ -n "$line" ]] || continue
+            printf '::warning title=The seams of the newest build::%s\n' "${line//$'\r'/}"
+          done
           exit 0
 
       - name: Remove the temporary official APK

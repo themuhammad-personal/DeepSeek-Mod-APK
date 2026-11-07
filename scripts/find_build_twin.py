@@ -358,13 +358,23 @@ def main() -> int:
             if not entry["found"]:
                 print(f"{key}: NOT FOUND")
                 continue
+            details = entry.get("details") or {}
+            extra = []
+            if details.get("promptFieldClass"):
+                extra.append(f"prompt field {details['promptFieldClass']}->{details['promptFieldName']}")
+            if details.get("promptWriterClass"):
+                extra.append(f"writer {details['promptWriterClass']}->{details['promptWriterName']}")
+            if details.get("contentHolderClass"):
+                extra.append(f"holder {details['contentHolderClass']}")
+            if details.get("contentHolderSet"):
+                extra.append(f"setter {details['contentHolderSet']}")
+            if details.get("contentHolderAppend"):
+                extra.append(f"update {details['contentHolderAppend']}")
             print(
                 f"{key}: {entry['class']}->{entry['name']}{entry['descriptor']} "
                 f"(similarity {entry['ratio']})"
+                + (" | " + ", ".join(extra) if extra else "")
             )
-            for name, value in (entry.get("details") or {}).items():
-                if value is not None:
-                    print(f"    {name}: {value}")
     return 0 if all(entry["found"] for entry in result["twins"].values()) else 1
 
 
