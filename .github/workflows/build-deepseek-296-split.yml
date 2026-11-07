@@ -1,16 +1,13 @@
 name: Build DeepSeek 2.7.5 (296) split APK set
 on:
-  workflow_dispatch:
-    inputs:
-      source_url:
-        description: "Direct HTTPS download URL of the exact owner-provided DeepSeek_2.7.5.apks file"
-        required: true
-        type: string
-      source_sha256:
-        description: "SHA-256 of the owner-provided .apks file"
-        required: true
-        default: "02e6dafdb37fb2be754d4dfd428d2cb9767a610f4de1fa30bce21f11dc14cd8c"
-        type: string
+  push:
+    branches:
+      - "final/2.7.5-296-split-apk"
+    paths:
+      - ".github/workflows/build-deepseek-296-split.yml"
+      - "scripts/repackage-signed-apks.sh"
+      - "patches/**"
+      - "extensions/**"
 permissions:
   contents: read
   packages: read
@@ -20,6 +17,7 @@ concurrency:
 jobs:
   build:
     name: Patch, re-sign and package all 2.7.5 split APKs
+    if: ${{ vars.SDS_296_SOURCE_URL != '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 75
     steps:
@@ -49,8 +47,8 @@ jobs:
           test -x "$ANDROID_HOME/build-tools/36.0.0/dexdump"
       - name: Download and verify the exact uploaded APKS archive
         env:
-          SOURCE_URL: ${{ inputs.source_url }}
-          SOURCE_SHA256: ${{ inputs.source_sha256 }}
+          SOURCE_URL: ${{ vars.SDS_296_SOURCE_URL }}
+          SOURCE_SHA256: 02e6dafdb37fb2be754d4dfd428d2cb9767a610f4de1fa30bce21f11dc14cd8c
         run: |
           set -euo pipefail
           [[ "$SOURCE_URL" == https://* ]] || { echo "::error::Source URL must use HTTPS."; exit 2; }
@@ -215,7 +213,7 @@ jobs:
           {
             echo "## DeepSeek 2.7.5 / versionCode 296 split build"
             echo
-            echo "- Source APKS SHA-256: ${inputs.source_sha256}"
+            echo "- Source APKS SHA-256: 02e6dafdb37fb2be754d4dfd428d2cb9767a610f4de1fa30bce21f11dc14cd8c"
             echo "- Base APK patched with all four Morphe patches."
             echo "- Both configuration splits re-signed with the same certificate as base.apk."
             echo "- Package: com.deepseek.chat; version: 2.7.5; versionCode: 296."
