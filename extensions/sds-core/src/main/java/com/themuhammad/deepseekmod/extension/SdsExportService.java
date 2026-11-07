@@ -78,7 +78,7 @@ public final class SdsExportService {
         if (destination == null || content == null) return false;
         java.io.OutputStream stream = null;
         try {
-            stream = destination.getOutputStream();
+            stream = destination.openOutputStream();
             byte[] bytes = content.getBytes(java.nio.charset.Charset.forName("UTF-8"));
             stream.write(bytes);
             stream.flush();
