@@ -177,6 +177,15 @@ def main() -> int:
         for key in unexpected[:10]:
             print(f"          {key[0]}->{key[1]}{key[2]}")
 
+    # 2b. The methods that the patches hook have to have changed, otherwise
+    #     the proof above would prove nothing.
+    not_hooked = sorted(allowed - set(changed))
+    if not_hooked:
+        failures += 1
+        print("FAILED: the patches did not change the methods that they hook")
+        for key in not_hooked:
+            print(f"          {key[0]}->{key[1]}{key[2]}")
+
     # 3. Every new class has to belong to the extension of this project or to
     #    the Kotlin runtime, which the patcher merges into the app.
     original_classes = {key[0] for key in original_methods}
