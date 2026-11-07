@@ -62,17 +62,17 @@ read_cert_digest() {
   local apk="$1"
   local report
   report="$("$APKSIGNER" verify --min-sdk-version 32 --print-certs "$apk" 2>&1)"
-  printf '%s\\n' "$report" > "$WORK/signed/$(basename "$apk").cert-report.txt"
+  printf '%s\n' "$report" > "$WORK/signed/$(basename "$apk").cert-report.txt"
   local digest
-  digest="$(printf '%s\\n' "$report" |
-    sed -nE 's/.*certificate SHA-256 digest:[[:space:]]*([[:xdigit:]: ]+).*/\\1/ip' |
-    head -n 1 | tr -d ' :\\r\\n' | tr '[:upper:]' '[:lower:]')"
+  digest="$(printf '%s\n' "$report" |
+    sed -nE 's/.*certificate SHA-256 digest:[[:space:]]*([[:xdigit:]: ]+).*/\1/ip' |
+    head -n 1 | tr -d ' :\r\n' | tr '[:upper:]' '[:lower:]')"
   [[ "$digest" =~ ^[0-9a-f]{64}$ ]] || {
     echo "could not parse SHA-256 signer certificate for $(basename "$apk")" >&2
-    printf '%s\\n' "$report" >&2
+    printf '%s\n' "$report" >&2
     return 1
   }
-  printf '%s\\n' "$digest"
+  printf '%s\n' "$digest"
 }
 
 sign_one() {
