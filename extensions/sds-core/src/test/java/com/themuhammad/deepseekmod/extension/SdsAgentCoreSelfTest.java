@@ -43,6 +43,7 @@ public final class SdsAgentCoreSelfTest {
         testDiagnosticsStayBounded();
         testStoresWriteAtomically();
         testMcpHandshake();
+        testRootfsInstallation();
         System.out.println("SDS agent-core self-test: PASS (" + checks + " checks)");
     }
 
@@ -645,6 +646,45 @@ public final class SdsAgentCoreSelfTest {
         check(badArguments.getStatus() == SdsToolResult.Status.FAILED,
                 "an unknown argument must be refused");
         SdsRuntimeRegistry.setSandboxManager(null);
+        deleteTree(parent);
+    }
+
+    private static void testRootfsInstallation() throws Exception {
+        File parent = Files.createTempDirectory("sds-rootfs-test").toFile();
+        File filesDirectory = new File(parent, "files");
+        check(filesDirectory.mkdirs(), "files directory create failed");
+        SdsSandboxManager manager = new SdsSandboxManager(new File(parent, "lib"), filesDirectory);
+
+        // The checksum of a well known value.
+        check("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+                        .equals(SdsHash.sha256("abc".getBytes("UTF-8"))),
+                "the checksum of a file has to be the known one");
+
+        // An archive that is not the pinned one is refused and nothing is unpacked.
+        File archive = manager.getRootfsArchive();
+        writeFile(archive, "this is not the pinned archive");
+        check(!manager.installRootfs(archive), "an archive with a wrong checksum must be refused");
+        check(!manager.getRootfsDirectory().exists(),
+                "a refused archive must not create the root filesystem");
+
+        // A download over a plain address is refused before a connection is opened.
+        boolean refused = false;
+        try {
+            SdsHttpFetcher.download("http://example.org/file", new File(parent, "file"),
+                    1024L, 1000);
+        } catch (java.io.IOException expected) {
+            refused = true;
+        }
+        check(refused, "a download over http must be refused");
+
+        refused = false;
+        try {
+            SdsHttpFetcher.download("https://example.org/file", null, 1024L, 1000);
+        } catch (IllegalArgumentException | java.io.IOException expected) {
+            refused = true;
+        }
+        check(refused, "a download without a target must be refused");
+
         deleteTree(parent);
     }
 

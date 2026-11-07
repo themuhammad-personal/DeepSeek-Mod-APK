@@ -1,6 +1,7 @@
 package com.themuhammad.deepseekmod.extension;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
@@ -77,6 +78,113 @@ public final class SdsHttpFetcher {
             throw new IOException("the address could not be reached");
         } finally {
             if (connection != null) connection.disconnect();
+        }
+    }
+
+    /**
+     * Downloads a file.
+     *
+     * The download only runs over https, a redirect is not followed and the
+     * size is bounded. The file is written next to the target and it only
+     * takes the place of the target when the whole download worked, so an
+     * interrupted download never leaves a truncated file behind.
+     *
+     * @param url the address, it has to use https
+     * @param target the file that is written
+     * @param maxBytes the largest file that is accepted
+     * @param readTimeoutMs the time a single read may take
+     * @return the number of bytes that were written
+     */
+    public static long download(String url, File target, long maxBytes, int readTimeoutMs)
+            throws IOException {
+        if (url == null || !url.startsWith("https://")) {
+            throw new IOException("only https is allowed");
+        }
+        if (url.length() > SdsMcpConfigStore.MAX_URL_LENGTH) {
+            throw new IOException("the address is too long");
+        }
+        if (target == null) throw new IllegalArgumentException("target is required");
+        if (maxBytes <= 0) throw new IllegalArgumentException("the limit has to be positive");
+        File parent = target.getParentFile();
+        if (parent != null && !parent.exists()) {
+            //noinspection ResultOfMethodCallIgnored
+            parent.mkdirs();
+        }
+        File part = new File(target.getAbsolutePath() + ".part");
+        HttpURLConnection connection = null;
+        long total = 0;
+        try {
+            connection = (HttpURLConnection) new URL(url).openConnection();
+            connection.setInstanceFollowRedirects(false);
+            connection.setRequestMethod("GET");
+            connection.setConnectTimeout(CONNECT_TIMEOUT_MS);
+            connection.setReadTimeout(readTimeoutMs);
+            connection.setRequestProperty("Accept", "application/octet-stream");
+            connection.setRequestProperty("User-Agent", "DeepSeek-Android-Agent/1.0");
+            int status = connection.getResponseCode();
+            if (status >= 300 && status < 400) {
+                throw new IOException("the address answered with a redirect");
+            }
+            if (status >= 400) {
+                throw new IOException("the address answered with the status " + status);
+            }
+            long declared = connection.getContentLength();
+            if (declared > maxBytes) {
+                throw new IOException("the file is larger than the limit");
+            }
+            InputStream input = connection.getInputStream();
+            java.io.OutputStream output = new java.io.FileOutputStream(part);
+            try {
+                byte[] chunk = new byte[64 * 1024];
+                int read;
+                while ((read = input.read(chunk)) > 0) {
+                    total += read;
+                    if (total > maxBytes) {
+                        throw new IOException("the file is larger than the limit");
+                    }
+                    output.write(chunk, 0, read);
+                }
+                output.flush();
+            } finally {
+                try {
+                    output.close();
+                } catch (IOException ignored) {
+                    // The file is closed either way.
+                }
+                try {
+                    input.close();
+                } catch (IOException ignored) {
+                    // The file is closed either way.
+                }
+            }
+        } catch (IOException failure) {
+            deleteQuietly(part);
+            throw failure;
+        } catch (Exception refused) {
+            deleteQuietly(part);
+            throw new IOException("the address could not be reached");
+        } finally {
+            if (connection != null) connection.disconnect();
+        }
+        if (target.exists() && !target.delete()) {
+            deleteQuietly(part);
+            throw new IOException("the old file could not be replaced");
+        }
+        if (!part.renameTo(target)) {
+            deleteQuietly(part);
+            throw new IOException("the file could not be moved into place");
+        }
+        return total;
+    }
+
+    /** Removes a file and ignores the failure. */
+    static void deleteQuietly(File file) {
+        if (file == null) return;
+        try {
+            //noinspection ResultOfMethodCallIgnored
+            file.delete();
+        } catch (Throwable ignored) {
+            // Nothing else can be done here.
         }
     }
 

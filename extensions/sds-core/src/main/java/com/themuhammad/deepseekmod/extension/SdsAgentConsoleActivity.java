@@ -446,6 +446,11 @@ public final class SdsAgentConsoleActivity extends Activity {
         LinearLayout.LayoutParams studioInputParams = matchWrap();
         studioInputParams.topMargin = dp(6);
         studioCard.addView(studioInput, studioInputParams);
+        Button installRootfs = button("Download and install the root filesystem");
+        installRootfs.setOnClickListener(v -> onInstallRootfs());
+        LinearLayout.LayoutParams installRootfsParams = wrapWrap();
+        installRootfsParams.topMargin = dp(6);
+        studioCard.addView(installRootfs, installRootfsParams);
         Button runCommand = button("Run the command after an approval");
         runCommand.setOnClickListener(v -> onRunSandboxCommand());
         LinearLayout.LayoutParams runCommandParams = wrapWrap();
@@ -897,6 +902,67 @@ public final class SdsAgentConsoleActivity extends Activity {
             return;
         }
         studioStatus.setText(manager.describe());
+    }
+
+    /**
+     * Downloads the pinned root filesystem and unpacks it.
+     *
+     * The approval shows the exact address and the checksum, so the user knows
+     * what is downloaded before anything is fetched.
+     */
+    private void onInstallRootfs() {
+        final SdsSandboxManager manager = SdsRuntimeRegistry.getSandboxManager();
+        if (manager == null) {
+            Toast.makeText(this, "The Linux Studio is not prepared in this build", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (!SdsRuntimeRegistry.isNetworkAllowed()) {
+            Toast.makeText(this, "The network is switched off", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("Download the root filesystem?")
+                .setMessage(SdsSandboxConfig.ROOTFS_URL
+                        + "\n\nThe checksum of the file is checked before it is unpacked."
+                        + "\n" + SdsSandboxConfig.ROOTFS_SHA256)
+                .setNegativeButton(android.content.DialogInterface.BUTTON_NEGATIVE, null)
+                .setPositiveButton(android.content.DialogInterface.BUTTON_POSITIVE,
+                        (dialog, which) -> installRootfsInBackground(manager))
+                .show();
+    }
+
+    private void installRootfsInBackground(final SdsSandboxManager manager) {
+        if (studioStatus != null) studioStatus.setText("the root filesystem is being downloaded...");
+        final Thread worker = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                String message;
+                try {
+                    File archive = manager.getRootfsArchive();
+                    SdsHttpFetcher.download(SdsSandboxConfig.ROOTFS_URL, archive,
+                            SdsSandboxConfig.ROOTFS_MAX_BYTES,
+                            SdsSandboxConfig.ROOTFS_READ_TIMEOUT_MS);
+                    if (!manager.installRootfs(archive)) {
+                        message = "the file was refused, its checksum is not the expected one";
+                        SdsHttpFetcher.deleteQuietly(archive);
+                    } else {
+                        message = "the root filesystem is ready";
+                    }
+                } catch (Exception refused) {
+                    message = "the root filesystem could not be downloaded";
+                }
+                final String text = message;
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        refreshSandbox();
+                        if (studioStatus != null) studioStatus.setText(text);
+                    }
+                });
+            }
+        }, "sds-rootfs");
+        worker.setDaemon(true);
+        worker.start();
     }
 
     private void onRunSandboxCommand() {

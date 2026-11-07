@@ -35,6 +35,7 @@ javac -encoding UTF-8 -d "$TMP/classes" \
   "$SRC/SdsJson.java" \
   "$SRC/SdsJsonWriter.java" \
   "$SRC/SdsAtomicFile.java" \
+  "$SRC/SdsHash.java" \
   "$SRC/SdsHttpFetcher.java" \
   "$SRC/SdsMcpConfigStore.java" \
   "$SRC/SdsMcpClient.java" \

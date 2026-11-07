@@ -24,6 +24,12 @@ public final class SdsSandboxConfig {
     };
 
     public static final String ROOTFS_DIRECTORY = "sds-rootfs";
+    /** The name of the downloaded archive in the app-private directory. */
+    public static final String ROOTFS_ARCHIVE = "sds-rootfs.tar.gz";
+    /** The largest archive that is accepted. */
+    public static final long ROOTFS_MAX_BYTES = 64L * 1024L * 1024L;
+    /** The time a single read of the archive may take. */
+    public static final int ROOTFS_READ_TIMEOUT_MS = 60_000;
     public static final String ROOTFS_MARKER = "rootfs.sha256";
     public static final String WORKSPACE_DIRECTORY = "workspace";
 
