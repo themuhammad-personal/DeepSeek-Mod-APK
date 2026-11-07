@@ -1,15 +1,19 @@
 package com.themuhammad.deepseekmod.patches
 
+import app.morphe.patcher.patch.packageMetadata
 import app.morphe.patcher.patch.patch
 
 /**
- * Compatibility-only checks for the exact inspected DeepSeek 2.7.4 sample.
+ * Compatibility-only checks for the inspected DeepSeek 2.7.4 samples.
  * No authentication, TLS, account, anti-fraud or device-integrity behaviour is changed.
  *
- * The gate is a real pre-flight validator: it resolves the fingerprints and then proves
- * that the instructions the experimental hooks rely on are present in the inspected shape.
- * A build that no longer matches fails here with a readable message instead of being
- * patched at the wrong instruction.
+ * The gate is a real pre-flight validator: it resolves the fingerprints of the build
+ * that is being patched and then proves that the instructions the experimental hooks
+ * rely on are present in the inspected shape. A build that no longer matches fails here
+ * with a readable message instead of being patched at the wrong instruction.
+ *
+ * The build is recognised by its version code, so the fingerprints of one build are
+ * never used for another build.
  */
 @Suppress("unused")
 val compatibilityGatePatch = patch(
@@ -17,24 +21,25 @@ val compatibilityGatePatch = patch(
     description = "Validates the prompt serializer and the mutable SSE ResponseFragment SET/APPEND methods before any hook is applied.",
     default = true
 ) {
-    compatibleWith(DEEPSEEK_2_7_4)
+    compatibleWith(DEEPSEEK_2_7_4, DEEPSEEK_2_7_4_VERSION_CODE_294)
     extendWith("extensions/sds-core.mpe")
 
     execute {
-        val promptMethod = ChatPromptSerializerFingerprint.methodOrNull
-            ?: error("DeepSeek prompt serializer Ljy1;->e(Lw94;Ljava/lang/Object;)V was not found.")
-        val responseSetMethod = ChatResponseContentSetFingerprint.methodOrNull
-            ?: error("DeepSeek streaming ResponseFragment SET method Lv44;->l was not found.")
-        val responseAppendMethod = ChatResponseContentAppendFingerprint.methodOrNull
-            ?: error("DeepSeek streaming ResponseFragment APPEND method Lv44;->m was not found.")
+        val profile = deepSeekTargetProfile(packageMetadata.versionCode)
+        val promptMethod = profile.promptSerializer.methodOrNull
+            ?: error("The DeepSeek prompt serializer of ${profile.label} was not found.")
+        val responseSetMethod = profile.responseContentSet.methodOrNull
+            ?: error("The DeepSeek streaming ResponseFragment SET method of ${profile.label} was not found.")
+        val responseAppendMethod = profile.responseContentAppend.methodOrNull
+            ?: error("The DeepSeek streaming ResponseFragment APPEND method of ${profile.label} was not found.")
 
         // Resolving the registers proves that the inspected instruction shapes are present.
-        val prompt = resolvePromptAccess(promptMethod)
-        val setUpdate = resolveSetContentUpdate(responseSetMethod)
-        val appendedContent = resolveAppendedContent(responseAppendMethod)
+        val prompt = resolvePromptAccess(promptMethod, profile)
+        val setUpdate = resolveSetContentUpdate(responseSetMethod, profile)
+        val appendedContent = resolveAppendedContent(responseAppendMethod, profile)
 
         println(
-            "DeepSeek 2.7.4 compatibility check passed: " +
+            "DeepSeek compatibility check passed for ${profile.label}: " +
                 "prompt register v${prompt.promptRegister}, " +
                 "SET content register v${setUpdate.contentRegister}, " +
                 "APPEND content register v${appendedContent.contentRegister} " +

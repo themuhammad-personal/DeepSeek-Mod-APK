@@ -9,15 +9,16 @@ verified.
 Checks performed on the patched APK:
 
   1. the DEX extension classes are present,
-  2. the prompt serializer reads Lly1;->c into a register and calls
-     SdsAgentHooks.beforePrompt with exactly that register, and the result is
-     written back into that register,
+  2. the prompt serializer reads the prompt field of the inspected build into a
+     register and calls SdsAgentHooks.beforePrompt with exactly that register,
+     and the result is written back into that register,
   3. the streaming ResponseFragment SET method calls SdsAgentHooks.observeResponse
-     with the register that carries the replacement content into Ldea;->j, and
-     the call happens after the update,
+     with the register that carries the replacement content into the content
+     update of the inspected build, and the call happens after the update,
   4. the streaming ResponseFragment APPEND method calls SdsAgentHooks.observeResponse
-     with the register that carries the complete accumulated content into
-     Ldea;->m, and that register is the one produced by StringBuilder.toString(),
+     with the register that carries the complete accumulated content into the
+     content update of the inspected build, and that register is the one produced
+     by StringBuilder.toString(),
      and the handback of a tool result runs before the update and is written
      back into the same register,
   5. the launcher Activity attaches the native Agent Console entry at the end of
@@ -26,6 +27,10 @@ Checks performed on the patched APK:
   7. the original DeepSeek launcher Activity is still declared,
   8. when the unpatched target is given, the patch introduces no new reference to a
      type that is not defined in any DEX file.
+
+The names of the inspected build are read from the version code of the APK, so
+the harness checks the build it is given and never the build of another
+version.
 
 Usage:
     python3 scripts/verify_patched_hooks.py <patched.apk> [unpatched.apk]
@@ -57,9 +62,39 @@ OBSERVE_RESPONSE = HOOKS_CLASS + "->observeResponse(Ljava/lang/String;)V"
 OBSERVE_RESPONSE_APPEND = HOOKS_CLASS + "->observeResponseAppend(Ljava/lang/String;)Ljava/lang/String;"
 CHAT_ENTRY_HOOK = EXTENSION_PACKAGE + "SdsChatEntry;->attach(Landroid/app/Activity;)V"
 
-PROMPT_FIELD = "Lly1;->c"
-CONTENT_SET = "Ldea;->j("
-CONTENT_APPEND = "Ldea;->m("
+# The names of the inspected build. Every build of the app is obfuscated on its
+# own, so the harness has to know which build it is looking at. The version
+# code of the APK selects the profile.
+PROFILES = {
+    "293": {
+        "prompt_class": "Ljy1;",
+        "prompt_method": "e",
+        "prompt_descriptor": "(Lw94;Ljava/lang/Object;)V",
+        "prompt_field": "Lly1;->c",
+        "set_class": "Lv44;",
+        "set_method": "l",
+        "set_descriptor": "(Ljava/lang/String;Lc26;Lgv1;)V",
+        "content_set": "Ldea;->j(",
+        "append_class": "Lv44;",
+        "append_method": "m",
+        "append_descriptor": "(Lc26;Ljava/lang/String;)V",
+        "content_append": "Ldea;->m(",
+    },
+    "294": {
+        "prompt_class": "La02;",
+        "prompt_method": "b",
+        "prompt_descriptor": "(Lwb4;Ljava/lang/Object;)V",
+        "prompt_field": "Lc02;->c",
+        "set_class": "Lv64;",
+        "set_method": "l",
+        "set_descriptor": "(Ljava/lang/String;Ls46;Lxw1;)V",
+        "content_set": "Leia;->j(",
+        "append_class": "Lv64;",
+        "append_method": "m",
+        "append_descriptor": "(Ls46;Ljava/lang/String;)V",
+        "content_append": "Leia;->m(",
+    },
+}
 STRING_BUILDER_TOSTRING = "Ljava/lang/StringBuilder;->toString()"
 
 REQUIRED_EXTENSION_CLASSES = [
@@ -219,6 +254,26 @@ def undefined_types(dexes):
     }
 
 
+def detect_profile(apk: Path) -> tuple[str, dict]:
+    """Select the names of the inspected build from the version code of the APK.
+
+    Every build of the app is obfuscated on its own, so the harness has to know
+    which build it is looking at before it can look for the hook call sites.
+    """
+    try:
+        from androguard.core.apk import APK
+
+        version_code = str(APK(str(apk)).get_androidversion_code())
+    except Exception as error:  # pragma: no cover - androguard is optional here
+        raise SystemExit(f"the version code of {apk} could not be read: {error}")
+    if version_code not in PROFILES:
+        raise SystemExit(
+            f"the version code {version_code} of {apk} is not inspected. "
+            f"The inspected builds are: {', '.join(sorted(PROFILES))}."
+        )
+    return version_code, PROFILES[version_code]
+
+
 def main() -> int:
     if len(sys.argv) not in (2, 3):
         print(__doc__, file=sys.stderr)
@@ -230,6 +285,8 @@ def main() -> int:
 
     failures: list[str] = []
     print(f"patched APK: {apk} ({apk.stat().st_size} bytes)")
+    version_code, profile = detect_profile(apk)
+    print(f"version code: {version_code}")
 
     dexes = load_dex(apk)
     print(f"DEX files:   {', '.join(name for name, _ in dexes)}")
@@ -243,17 +300,24 @@ def main() -> int:
             print(f"  OK      {descriptor}")
 
     print("\n[2] prompt hook")
-    prompt = find_method(dexes, "Ljy1;", "e", "(Lw94;Ljava/lang/Object;)V")
+    prompt = find_method(
+        dexes,
+        profile["prompt_class"],
+        profile["prompt_method"],
+        profile["prompt_descriptor"],
+    )
     if prompt is None:
-        failures.append("prompt serializer Ljy1;->e was not found")
-        print("  MISSING prompt serializer Ljy1;->e")
+        failures.append(
+            f"prompt serializer {profile['prompt_class']}->{profile['prompt_method']} was not found"
+        )
+        print(f"  MISSING prompt serializer {profile['prompt_class']}->{profile['prompt_method']}")
     else:
         prompt_instructions = instructions_of(prompt)
-        field_index, _ = find_instruction(prompt_instructions, PROMPT_FIELD)
+        field_index, _ = find_instruction(prompt_instructions, profile["prompt_field"])
         hook_index, _ = find_instruction(prompt_instructions, BEFORE_PROMPT)
         if field_index < 0:
-            failures.append("prompt serializer does not read Lly1;->c")
-            print("  MISSING prompt field read Lly1;->c")
+            failures.append(f"prompt serializer does not read {profile['prompt_field']}")
+            print(f"  MISSING prompt field read {profile['prompt_field']}")
         elif hook_index < 0:
             failures.append("prompt serializer does not call SdsAgentHooks.beforePrompt")
             print("  MISSING SdsAgentHooks.beforePrompt call")
@@ -282,17 +346,26 @@ def main() -> int:
                     print("  FAILED  the guarded prompt is not written back into the prompt register")
 
     print("\n[3] streaming SET hook")
-    set_method = find_method(dexes, "Lv44;", "l", "(Ljava/lang/String;Lc26;Lgv1;)V")
+    set_method = find_method(
+        dexes,
+        profile["set_class"],
+        profile["set_method"],
+        profile["set_descriptor"],
+    )
     if set_method is None:
-        failures.append("streaming SET method Lv44;->l was not found")
-        print("  MISSING streaming SET method Lv44;->l")
+        failures.append(
+            f"streaming SET method {profile['set_class']}->{profile['set_method']} was not found"
+        )
+        print(f"  MISSING streaming SET method {profile['set_class']}->{profile['set_method']}")
     else:
         set_instructions = instructions_of(set_method)
-        update_index, _ = find_instruction(set_instructions, CONTENT_SET)
+        update_index, _ = find_instruction(set_instructions, profile["content_set"])
         hook_index, _ = find_instruction(set_instructions, OBSERVE_RESPONSE)
         if update_index < 0:
-            failures.append("streaming SET method does not call Ldea;->j")
-            print("  MISSING Ldea;->j update")
+            failures.append(
+                f"streaming SET method does not call {profile['content_set'].rstrip('(')}"
+            )
+            print(f"  MISSING {profile['content_set'].rstrip('(')} update")
         elif hook_index < 0:
             failures.append("streaming SET method does not call SdsAgentHooks.observeResponse")
             print("  MISSING SdsAgentHooks.observeResponse call")
@@ -316,18 +389,31 @@ def main() -> int:
                 print("  OK      the observer runs after the content update")
 
     print("\n[4] streaming APPEND hook")
-    append_method = find_method(dexes, "Lv44;", "m", "(Lc26;Ljava/lang/String;)V")
+    append_method = find_method(
+        dexes,
+        profile["append_class"],
+        profile["append_method"],
+        profile["append_descriptor"],
+    )
     if append_method is None:
-        failures.append("streaming APPEND method Lv44;->m was not found")
-        print("  MISSING streaming APPEND method Lv44;->m")
+        failures.append(
+            f"streaming APPEND method {profile['append_class']}->{profile['append_method']} "
+            "was not found"
+        )
+        print(
+            f"  MISSING streaming APPEND method "
+            f"{profile['append_class']}->{profile['append_method']}"
+        )
     else:
         append_instructions = instructions_of(append_method)
-        update_index, _ = find_instruction(append_instructions, CONTENT_APPEND)
+        update_index, _ = find_instruction(append_instructions, profile["content_append"])
         hook_index, _ = find_instruction(append_instructions, OBSERVE_RESPONSE)
         builder_index, _ = find_instruction(append_instructions, STRING_BUILDER_TOSTRING)
         if update_index < 0:
-            failures.append("streaming APPEND method does not call Ldea;->m")
-            print("  MISSING Ldea;->m update")
+            failures.append(
+                f"streaming APPEND method does not call {profile['content_append'].rstrip('(')}"
+            )
+            print(f"  MISSING {profile['content_append'].rstrip('(')} update")
         elif hook_index < 0:
             failures.append("streaming APPEND method does not call SdsAgentHooks.observeResponse")
             print("  MISSING SdsAgentHooks.observeResponse call")

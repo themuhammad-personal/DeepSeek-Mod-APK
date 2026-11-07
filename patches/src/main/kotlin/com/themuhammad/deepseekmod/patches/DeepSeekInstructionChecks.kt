@@ -11,20 +11,18 @@ import com.android.tools.smali.dexlib2.iface.reference.FieldReference
 import com.android.tools.smali.dexlib2.iface.reference.MethodReference
 
 /**
- * Instruction level checks for the inspected DeepSeek 2.7.4 chat path.
+ * Instruction level checks for the inspected DeepSeek chat path.
  *
  * The checks are shared by the compatibility gate and by the experimental hook patch
  * so that both agree on which register carries which value. Every check reads the
  * actual bytecode instead of assuming a register layout, so a changed build fails with
  * a clear message instead of patching the wrong value.
+ *
+ * The class names that the checks look for come from the profile of the build that is
+ * being patched, so the checks always inspect the same build that the fingerprints
+ * were taken from.
  */
 
-internal const val PROMPT_FIELD_CLASS = "Lly1;"
-internal const val PROMPT_FIELD_NAME = "c"
-internal const val PROMPT_FIELD_TYPE = "Ljava/lang/String;"
-internal const val PROMPT_SERIALIZER_CLASS = "Ly53;"
-internal const val PROMPT_SERIALIZER_NAME = "x"
-internal const val CONTENT_HOLDER_CLASS = "Ldea;"
 internal const val CONTENT_SET_NAME = "j"
 internal const val CONTENT_APPEND_NAME = "m"
 internal const val STRING_BUILDER_CLASS = "Ljava/lang/StringBuilder;"
@@ -66,15 +64,18 @@ private fun instructionsOf(method: Method, description: String): List<Instructio
  * The inspected serializer reads the prompt field into a register and passes that
  * register to the string serializer directly afterwards.
  */
-internal fun resolvePromptAccess(method: Method): PromptAccess {
+internal fun resolvePromptAccess(method: Method, profile: DeepSeekTargetProfile): PromptAccess {
     val instructions = instructionsOf(method, "prompt serializer")
     val fieldIndex = instructions.indices.firstOrNull { index ->
         val reference = fieldReferenceOf(instructions[index])
         reference != null &&
-            reference.definingClass == PROMPT_FIELD_CLASS &&
-            reference.name == PROMPT_FIELD_NAME &&
-            reference.type == PROMPT_FIELD_TYPE
-    } ?: error("DeepSeek prompt field $PROMPT_FIELD_CLASS->$PROMPT_FIELD_NAME was not found.")
+            reference.definingClass == profile.promptFieldClass &&
+            reference.name == profile.promptFieldName &&
+            reference.type == profile.promptFieldType
+    } ?: error(
+        "DeepSeek prompt field ${profile.promptFieldClass}->${profile.promptFieldName} " +
+            "was not found in ${profile.label}."
+    )
 
     val fieldInstruction = instructions[fieldIndex] as? TwoRegisterInstruction
         ?: error("DeepSeek prompt field read is not a two-register instruction.")
@@ -82,10 +83,13 @@ internal fun resolvePromptAccess(method: Method): PromptAccess {
     val serializerIndex = instructions.indices.firstOrNull { index ->
         index > fieldIndex &&
             methodReferenceOf(instructions[index])?.let { reference ->
-                reference.definingClass == PROMPT_SERIALIZER_CLASS &&
-                    reference.name == PROMPT_SERIALIZER_NAME
+                reference.definingClass == profile.promptSerializerClass &&
+                    reference.name == profile.promptSerializerName
             } == true
-    } ?: error("DeepSeek prompt serializer call was not found.")
+    } ?: error(
+        "DeepSeek prompt serializer call ${profile.promptSerializerClass}->" +
+            "${profile.promptSerializerName} was not found in ${profile.label}."
+    )
 
     check(serializerIndex == fieldIndex + 1) {
         "DeepSeek prompt serializer call does not directly follow the prompt field read."
@@ -118,15 +122,18 @@ internal fun resolveReturnIndex(method: Method): Int {
  * The inspected SET path decodes the replacement value and writes it into the content
  * holder with a single argument call.
  */
-internal fun resolveSetContentUpdate(method: Method): ContentUpdate {
+internal fun resolveSetContentUpdate(method: Method, profile: DeepSeekTargetProfile): ContentUpdate {
     val instructions = instructionsOf(method, "streaming ResponseFragment SET method")
     val updateIndex = instructions.indices.firstOrNull { index ->
         methodReferenceOf(instructions[index])?.let { reference ->
-            reference.definingClass == CONTENT_HOLDER_CLASS &&
+            reference.definingClass == profile.contentHolderClass &&
                 reference.name == CONTENT_SET_NAME &&
                 reference.parameterTypes == listOf("Ljava/lang/Object;")
         } == true
-    } ?: error("DeepSeek streaming ResponseFragment SET update was not found.")
+    } ?: error(
+        "DeepSeek streaming ResponseFragment SET update " +
+            "${profile.contentHolderClass}->$CONTENT_SET_NAME was not found in ${profile.label}."
+    )
 
     val update = instructions[updateIndex] as? FiveRegisterInstruction
         ?: error("DeepSeek streaming ResponseFragment SET update has an unexpected instruction format.")
@@ -148,15 +155,18 @@ internal fun resolveSetContentUpdate(method: Method): ContentUpdate {
  * The inspected code ignores the boolean result of the content update, so the observer
  * has to be inserted directly after the update call.
  */
-internal fun resolveAppendedContent(method: Method): ContentUpdate {
+internal fun resolveAppendedContent(method: Method, profile: DeepSeekTargetProfile): ContentUpdate {
     val instructions = instructionsOf(method, "streaming ResponseFragment APPEND method")
     val appendIndex = instructions.indices.firstOrNull { index ->
         methodReferenceOf(instructions[index])?.let { reference ->
-            reference.definingClass == CONTENT_HOLDER_CLASS &&
+            reference.definingClass == profile.contentHolderClass &&
                 reference.name == CONTENT_APPEND_NAME &&
                 reference.parameterTypes == listOf("Ljava/lang/Object;", "Ljava/lang/Object;")
         } == true
-    } ?: error("DeepSeek streaming ResponseFragment APPEND update was not found.")
+    } ?: error(
+        "DeepSeek streaming ResponseFragment APPEND update " +
+            "${profile.contentHolderClass}->$CONTENT_APPEND_NAME was not found in ${profile.label}."
+    )
 
     val appendInvoke = instructions[appendIndex] as? FiveRegisterInstruction
         ?: error("DeepSeek streaming ResponseFragment APPEND update has an unexpected instruction format.")

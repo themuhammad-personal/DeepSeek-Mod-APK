@@ -39,6 +39,7 @@ on:
       - ".github/workflows/verify-pinned-apk-patches.yml"
       - "scripts/rebuild-pinned-apk.py"
       - "scripts/verify_patched_hooks.py"
+      - "scripts/verify_fingerprints.py"
       - "patches/**"
       - "extensions/**"
 
@@ -167,6 +168,24 @@ jobs:
           "$AAPT" dump badging "$RUNNER_TEMP/deepseek-verify/deepseek-pinned.apk" > "$RUNNER_TEMP/deepseek-verify/source-badging.txt"
           grep -F "package: name='com.deepseek.chat' versionCode='293' versionName='2.7.4'" "$RUNNER_TEMP/deepseek-verify/source-badging.txt"
           grep -F "native-code: 'arm64-v8a'" "$RUNNER_TEMP/deepseek-verify/source-badging.txt"
+
+      - name: Verify the fingerprint set of the pinned build
+        if: steps.source.outputs.has_source == 'true'
+        shell: bash
+        run: |
+          set -uo pipefail
+          python3 -m pip install --quiet --disable-pip-version-check androguard
+          status=0
+          python3 scripts/verify_fingerprints.py \
+            "$RUNNER_TEMP/deepseek-verify/deepseek-pinned.apk" \
+            > "$RUNNER_TEMP/fingerprint-verification.log" 2>&1 || status=$?
+          cat "$RUNNER_TEMP/fingerprint-verification.log"
+          if [[ "$status" -ne 0 ]]; then
+            tail -9 "$RUNNER_TEMP/fingerprint-verification.log" | tac | while IFS= read -r line; do
+              printf '::error title=Fingerprint verification failed::%s\n' "${line//$'\r'/}"
+            done
+          fi
+          exit "$status"
 
       - name: Download pinned Morphe Desktop CLI
         if: steps.source.outputs.has_source == 'true'
