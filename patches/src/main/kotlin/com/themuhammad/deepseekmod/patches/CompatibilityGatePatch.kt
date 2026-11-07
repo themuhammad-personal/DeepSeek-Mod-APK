@@ -29,7 +29,12 @@ val compatibilityGatePatch = patch(
     description = "Validates the prompt serializer and the mutable SSE ResponseFragment SET/APPEND methods before any hook is applied.",
     default = true
 ) {
-    compatibleWith(DEEPSEEK_2_7_4, DEEPSEEK_2_7_4_VERSION_CODE_294, DEEPSEEK_2_7_5_VERSION_CODE_296)
+    compatibleWith(
+        DEEPSEEK_2_7_4,
+        DEEPSEEK_2_7_4_VERSION_CODE_294,
+        DEEPSEEK_2_7_5_VERSION_CODE_295,
+        DEEPSEEK_2_7_5_VERSION_CODE_296
+    )
     extendWith("extensions/sds-core.mpe")
 
     execute {

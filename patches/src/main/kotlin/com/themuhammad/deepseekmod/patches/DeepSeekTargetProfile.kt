@@ -57,6 +57,7 @@ internal data class DeepSeekTargetProfile(
 internal val deepSeekTargetProfiles: List<DeepSeekTargetProfile> = listOf(
     deepSeekTargetProfile293,
     deepSeekTargetProfile294,
+    deepSeekTargetProfile295,
     deepSeekTargetProfile296
 )
 

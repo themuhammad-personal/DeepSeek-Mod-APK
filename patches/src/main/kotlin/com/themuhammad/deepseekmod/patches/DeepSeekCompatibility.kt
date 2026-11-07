@@ -91,3 +91,32 @@ internal val DEEPSEEK_2_7_5_VERSION_CODE_296 = Compatibility(
         )
     )
 )
+
+/**
+ * The DeepSeek 2.7.5 build with version code 295.
+ *
+ * This is the build that the official download address of DeepSeek serves
+ * right now. It is the universal APK of the app, it runs on Android 7 and it
+ * is obfuscated on its own, so every class name of the other builds changed.
+ * Its fingerprint set is `DeepSeekFingerprints295.kt`.
+ *
+ * The target is experimental, because the patches were applied to it in the
+ * verification workflow, but it has not been run on a device yet.
+ */
+internal val DEEPSEEK_2_7_5_VERSION_CODE_295 = Compatibility(
+    name = "DeepSeek",
+    packageName = "com.deepseek.chat",
+    apkFileType = ApkFileType.APK,
+    appIconColor = 0x1E3A5F,
+    targets = listOf(
+        AppTarget(
+            version = "2.7.5",
+            versionCodes = mapOf(SupportedAbi.ARM64_V8A to 295),
+            isExperimental = true,
+            minSdk = 24,
+            description = "The build with version code 295 has its own fingerprint set. " +
+                "The patches were applied to it in the verification workflow, but it was " +
+                "not run on a device yet."
+        )
+    )
+)

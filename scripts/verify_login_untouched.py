@@ -52,6 +52,11 @@ PROFILES = {
         "set": ("Lv64;", "l", "(Ljava/lang/String;Ls46;Lxw1;)V"),
         "append": ("Lv64;", "m", "(Ls46;Ljava/lang/String;)V"),
     },
+    "295": {
+        "prompt": ("Loy1;", "e", "(Laa4;Ljava/lang/Object;)V"),
+        "set": ("Ly44;", "l", "(Ljava/lang/String;Lh26;Liv1;)V"),
+        "append": ("Ly44;", "m", "(Lh26;Ljava/lang/String;)V"),
+    },
     "296": {
         "prompt": ("Lf02;", "b", "(Lac4;Ljava/lang/Object;)V"),
         "set": ("Ly64;", "l", "(Ljava/lang/String;Lx46;Lzw1;)V"),
