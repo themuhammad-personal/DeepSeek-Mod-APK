@@ -504,9 +504,9 @@ public final class SdsAgentCoreSelfTest {
         check(SdsJson.optArray(round, "list").size() == 2, "the round trip must keep the list");
 
         // A number without a JSON form must not break the document.
-        Map<String, Object> broken = new java.util.LinkedHashMap<>();
-        broken.put("value", Double.NaN);
-        Map<String, Object> repaired = SdsJson.parseObject(SdsJsonWriter.write(broken));
+        Map<String, Object> notANumber = new java.util.LinkedHashMap<>();
+        notANumber.put("value", Double.NaN);
+        Map<String, Object> repaired = SdsJson.parseObject(SdsJsonWriter.write(notANumber));
         check(repaired.get("value") == null, "a number without a JSON form must become null");
     }
 
