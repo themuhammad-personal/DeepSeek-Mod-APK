@@ -17,15 +17,18 @@ Checks performed on the patched APK:
      with the register that carries the complete accumulated content into
      Ldea;->m, and that register is the one produced by StringBuilder.toString(),
   5. the native Agent Console Activity is declared in the manifest,
-  6. the original DeepSeek launcher Activity is still declared.
+  6. the original DeepSeek launcher Activity is still declared,
+  7. when the unpatched target is given, the patch introduces no new reference to a
+     type that is not defined in any DEX file.
 
 Usage:
-    python3 scripts/verify_patched_hooks.py <patched.apk>
+    python3 scripts/verify_patched_hooks.py <patched.apk> [unpatched.apk]
 """
 
 from __future__ import annotations
 
 import logging
+import re
 import sys
 import zipfile
 from pathlib import Path
@@ -61,6 +64,27 @@ REQUIRED_EXTENSION_CLASSES = [
     EXTENSION_PACKAGE + "SdsCoreMarker;",
     EXTENSION_PACKAGE + "SdsAgentConsoleActivity;",
 ]
+
+# Type descriptors are collected from the disassembled output of the DEX files.
+TYPE_DESCRIPTOR = re.compile(r"L[A-Za-z0-9_$/]+;")
+
+# Types that the Android platform or the Java runtime provides at runtime.
+FRAMEWORK_PREFIXES = (
+    "Ljava/",
+    "Ljavax/",
+    "Landroid/",
+    "Ldalvik/",
+    "Lkotlin/",
+    "Lsun/",
+    "Ljdk/",
+    "Lorg/w3c/",
+    "Lorg/xml/",
+    "Lorg/json/",
+    "Lorg/intellij/",
+    "Lorg/jetbrains/",
+    "Lcom/android/",
+    "Lcom/google/android/",
+)
 
 
 def load_dex(apk: Path):
@@ -125,8 +149,42 @@ def find_instruction(instructions, reference_prefix: str):
     return -1, None
 
 
+def collect_types(dexes):
+    """Return the defined and the referenced type descriptors of every DEX file.
+
+    The official DeepSeek APK references optional third-party SDK types that it does
+    not bundle, so the set of undefined references is compared between the unpatched
+    and the patched APK instead of being required to be empty.
+    """
+    defined: set[str] = set()
+    referenced: set[str] = set()
+    for _, dex in dexes:
+        for klass in dex.get_classes():
+            defined.add(klass.get_name())
+            referenced.update(TYPE_DESCRIPTOR.findall(klass.get_superclassname() or ""))
+            for interface in klass.get_interfaces() or []:
+                referenced.update(TYPE_DESCRIPTOR.findall(interface))
+            for field in klass.get_fields():
+                referenced.update(TYPE_DESCRIPTOR.findall(field.get_descriptor()))
+            for method in klass.get_methods():
+                referenced.update(TYPE_DESCRIPTOR.findall(method.get_descriptor()))
+                for instruction in instructions_of(method):
+                    referenced.update(TYPE_DESCRIPTOR.findall(instruction.get_output()))
+    return defined, referenced
+
+
+def undefined_types(dexes):
+    """Return the types that are referenced but not defined in any DEX file."""
+    defined, referenced = collect_types(dexes)
+    return {
+        descriptor
+        for descriptor in referenced
+        if descriptor not in defined and not descriptor.startswith(FRAMEWORK_PREFIXES)
+    }
+
+
 def main() -> int:
-    if len(sys.argv) != 2:
+    if len(sys.argv) not in (2, 3):
         print(__doc__, file=sys.stderr)
         return 2
 
@@ -277,6 +335,34 @@ def main() -> int:
         else:
             failures.append(f"manifest does not declare {activity}")
             print(f"  MISSING {label}: {activity}")
+
+    if len(sys.argv) == 3:
+        source_apk = Path(sys.argv[2])
+        print("\n[6] undefined type references")
+        if not source_apk.is_file():
+            failures.append(f"unpatched APK not found: {source_apk}")
+            print(f"  MISSING unpatched APK: {source_apk}")
+        else:
+            source_undefined = undefined_types(load_dex(source_apk))
+            patched_undefined = undefined_types(dexes)
+            introduced = sorted(patched_undefined - source_undefined)
+            print(
+                f"  unpatched target: {len(source_undefined)} undefined type references"
+                " (optional third-party SDK types that the official APK does not bundle)"
+            )
+            print(f"  patched APK:      {len(patched_undefined)} undefined type references")
+            if introduced:
+                for descriptor in introduced:
+                    print(f"  FAILED  the patch introduced the undefined type {descriptor}")
+                failures.append(
+                    "the patch introduced undefined type references: " + ", ".join(introduced)
+                )
+            else:
+                print("  OK      the patch introduced no new undefined type reference")
+    elif len(sys.argv) > 3:
+        print("\n[6] undefined type references")
+        print("  SKIPPED only one APK was given, the comparison needs the unpatched target too")
+        failures.append("too many arguments")
 
     print()
     if failures:
