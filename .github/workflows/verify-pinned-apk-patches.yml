@@ -12,6 +12,10 @@ name: Verify Morphe patches against the pinned DeepSeek target
 # against exactly the inspected target. It is not byte identical to the signed
 # original and it is not signed with DeepSeek's certificate. Nothing here bypasses
 # or rewrites login, session, anti-fraud or integrity behaviour.
+#
+# The source location is read from .github/pinned-source.env when that file exists.
+# That file is not part of the project: it only points at the owner's own copy of
+# the pinned extraction and it is meant to be deleted once a run has completed.
 
 on:
   workflow_dispatch:
@@ -26,9 +30,12 @@ on:
         required: false
         type: string
         default: ""
-  repository_dispatch:
-    types:
-      - verify-pinned-apk
+  push:
+    branches:
+      - "work/**"
+      - "arena/**"
+    paths:
+      - ".github/pinned-source.env"
 
 permissions:
   contents: read
@@ -38,29 +45,55 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     env:
-      SOURCE_URL: ${{ inputs.source_url || github.event.client_payload.source_url }}
-      SOURCE_SHA256: ${{ inputs.source_sha256 || github.event.client_payload.source_sha256 }}
+      SOURCE_URL: ${{ inputs.source_url }}
+      SOURCE_SHA256: ${{ inputs.source_sha256 }}
     steps:
       - name: Check out source
         uses: actions/checkout@v4
 
+      - name: Resolve the pinned source location
+        id: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          url="$SOURCE_URL"
+          sha="$SOURCE_SHA256"
+          if [[ -f .github/pinned-source.env ]]; then
+            # shellcheck disable=SC1091
+            set -a; source .github/pinned-source.env; set +a
+            url="${url:-${PINNED_SOURCE_URL:-}}"
+            sha="${sha:-${PINNED_SOURCE_SHA256:-}}"
+          fi
+          echo "url=${url}" >> "$GITHUB_OUTPUT"
+          echo "sha=${sha}" >> "$GITHUB_OUTPUT"
+          if [[ -z "$url" || -z "$sha" ]]; then
+            echo "has_source=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No pinned source is configured, so this run verified nothing."
+          else
+            echo "has_source=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Set up Java
+        if: steps.source.outputs.has_source == 'true'
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "21"
 
       - name: Set up Gradle
+        if: steps.source.outputs.has_source == 'true'
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "9.8.2"
 
       - name: Set up Android SDK
+        if: steps.source.outputs.has_source == 'true'
         uses: android-actions/setup-android@v3
         with:
           packages: platform-tools
 
       - name: Install Android SDK platform and build tools
+        if: steps.source.outputs.has_source == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -68,35 +101,41 @@ jobs:
           test -s "$ANDROID_HOME/platforms/android-36/android.jar"
           test -x "$ANDROID_HOME/build-tools/36.0.0/aapt"
           test -x "$ANDROID_HOME/build-tools/36.0.0/apksigner"
+          test -x "$ANDROID_HOME/build-tools/36.0.0/zipalign"
 
       - name: Run approval-first native core tests
+        if: steps.source.outputs.has_source == 'true'
         run: bash scripts/test-agent-core.sh
 
       - name: Build Morphe patch bundle
+        if: steps.source.outputs.has_source == 'true'
         run: gradle --no-daemon buildAndroid
         env:
           GITHUB_ACTOR: ${{ github.actor }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Download and verify the pinned extraction bundle
+        if: steps.source.outputs.has_source == 'true'
         shell: bash
         run: |
           set -euo pipefail
-          [[ -n "$SOURCE_URL" ]] || { echo "::error::No pinned source URL configured."; exit 2; }
-          [[ "$SOURCE_URL" == https://* ]] || { echo "::error::The source URL must use HTTPS."; exit 2; }
-          [[ "$SOURCE_SHA256" =~ ^[a-fA-F0-9]{64}$ ]] || { echo "::error::The source SHA-256 must be 64 hexadecimal characters."; exit 2; }
+          URL="${{ steps.source.outputs.url }}"
+          SHA="${{ steps.source.outputs.sha }}"
+          [[ "$URL" == https://* ]] || { echo "::error::The source URL must use HTTPS."; exit 2; }
+          [[ "$SHA" =~ ^[a-fA-F0-9]{64}$ ]] || { echo "::error::The source SHA-256 must be 64 hexadecimal characters."; exit 2; }
           mkdir -p "$RUNNER_TEMP/deepseek-verify"
           curl --proto '=https' --tlsv1.2 --fail --location --retry 3 --max-time 600 \
-            "$SOURCE_URL" \
+            "$URL" \
             --output "$RUNNER_TEMP/deepseek-verify/pinned-extraction.zip"
           ACTUAL_SHA="$(sha256sum "$RUNNER_TEMP/deepseek-verify/pinned-extraction.zip" | awk '{print $1}')"
-          if [[ "$ACTUAL_SHA" != "${SOURCE_SHA256,,}" ]]; then
-            echo "::error::Extraction bundle checksum mismatch. Expected $SOURCE_SHA256 but downloaded $ACTUAL_SHA."
+          if [[ "$ACTUAL_SHA" != "${SHA,,}" ]]; then
+            echo "::error::Extraction bundle checksum mismatch. Expected $SHA but downloaded $ACTUAL_SHA."
             exit 1
           fi
           echo "$ACTUAL_SHA  $RUNNER_TEMP/deepseek-verify/pinned-extraction.zip" | sha256sum --check
 
       - name: Rebuild the pinned target APK and check its identity
+        if: steps.source.outputs.has_source == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -114,6 +153,7 @@ jobs:
           grep -F "native-code: 'arm64-v8a'" "$RUNNER_TEMP/deepseek-verify/source-badging.txt"
 
       - name: Download pinned Morphe Desktop CLI
+        if: steps.source.outputs.has_source == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -123,6 +163,7 @@ jobs:
           echo "3a2efefd567b44dde15971a58d5aa649a32aba30781d3400dc08d688c720168f $RUNNER_TEMP/deepseek-verify/morphe-desktop.jar" | sha256sum --check
 
       - name: Apply the compatibility, hook and console patches
+        if: steps.source.outputs.has_source == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -151,6 +192,7 @@ jobs:
           PYRESULT
 
       - name: Verify patched APK package, version, signature and manifest
+        if: steps.source.outputs.has_source == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -163,6 +205,7 @@ jobs:
           "$AAPT" dump xmltree "$APK" AndroidManifest.xml | grep -F "com.themuhammad.deepseekmod.extension.SdsAgentConsoleActivity"
 
       - name: Verify the hook call sites in the patched DEX
+        if: steps.source.outputs.has_source == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -170,24 +213,23 @@ jobs:
           python3 scripts/verify_patched_hooks.py "$RUNNER_TEMP/deepseek-verify/deepseek-patched.apk"
 
       - name: Write the verification report
-        shell: bash
         if: always()
+        shell: bash
         run: |
           set -euo pipefail
           {
-            echo "### Morphe apply verification"
-            echo
-            echo "- source bundle SHA-256: ${SOURCE_SHA256}"
-            echo "- rebuilt target SHA-256: $(sha256sum "$RUNNER_TEMP/deepseek-verify/deepseek-pinned.apk" 2>/dev/null | awk '{print $1}' || echo unavailable)"
-            echo "- patched APK SHA-256: $(sha256sum "$RUNNER_TEMP/deepseek-verify/deepseek-patched.apk" 2>/dev/null | awk '{print $1}' || echo unavailable)"
-            echo "- patched APK size: $(stat -c%s "$RUNNER_TEMP/deepseek-verify/deepseek-patched.apk" 2>/dev/null || echo unavailable)"
-          } > "$RUNNER_TEMP/deepseek-verify/report.md"
-          cat "$RUNNER_TEMP/deepseek-verify/report.md"
-          {
             echo "## Morphe apply verification"
             echo
-            cat "$RUNNER_TEMP/deepseek-verify/report.md"
+            if [[ "${{ steps.source.outputs.has_source }}" != "true" ]]; then
+              echo "NOT VERIFIED. No pinned source was configured for this run."
+            else
+              echo "- source bundle SHA-256: ${{ steps.source.outputs.sha }}"
+              echo "- rebuilt target SHA-256: $(sha256sum "$RUNNER_TEMP/deepseek-verify/deepseek-pinned.apk" 2>/dev/null | awk '{print $1}' || echo unavailable)"
+              echo "- patched APK SHA-256: $(sha256sum "$RUNNER_TEMP/deepseek-verify/deepseek-patched.apk" 2>/dev/null | awk '{print $1}' || echo unavailable)"
+              echo "- patched APK size: $(stat -c%s "$RUNNER_TEMP/deepseek-verify/deepseek-patched.apk" 2>/dev/null || echo unavailable)"
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
+          cat "$GITHUB_STEP_SUMMARY" || true
 
       - name: Remove temporary third-party APK and patched APK
         if: always()
