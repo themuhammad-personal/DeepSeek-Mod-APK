@@ -72,12 +72,16 @@ sign_one() {
     'META-INF/*.RSA' 'META-INF/*.DSA' 'META-INF/*.EC' >/dev/null 2>&1 || true
 
   "$ZIPALIGN" -f -p 4 "$unsigned" "$aligned"
-  "$APKSIGNER" sign --v1-signing-enabled false --v2-signing-enabled true \
-    --v3-signing-enabled true --v4-signing-enabled false \
+  # The inspected 296 base target requires Android API 32. Some configuration
+  # splits omit uses-sdk in their own manifest; pin the platform range here so
+  # apksigner does not incorrectly attempt a legacy v1 fallback.
+  echo "Signing $name for minSdk 32"
+  "$APKSIGNER" sign --min-sdk-version 32 --v1-signing-enabled false \
+    --v2-signing-enabled true --v3-signing-enabled true --v4-signing-enabled false \
     --ks "$SDS_KEYSTORE" --ks-key-alias "$SDS_KEY_ALIAS" \
     --ks-pass env:SDS_KEYSTORE_PASSWORD --key-pass env:SDS_KEY_PASSWORD \
     --out "$output" "$aligned"
-  "$APKSIGNER" verify --verbose "$output" >/dev/null
+  "$APKSIGNER" verify --min-sdk-version 32 --verbose "$output" >/dev/null
   "$APKSIGNER" verify --print-certs "$output" |
     awk -F': ' '/Signer #1 certificate SHA-256 digest:/ {print tolower($2); exit}'
 }
@@ -89,7 +93,7 @@ done
 CERT="$(cat "$WORK/signed/base.cert")"
 [[ "$CERT" =~ ^[0-9a-f]{64}$ ]] || { echo "invalid base signer digest" >&2; exit 1; }
 for signed in "$WORK/signed"/*.apk; do
-  "$APKSIGNER" verify --verbose "$signed" >/dev/null
+  "$APKSIGNER" verify --min-sdk-version 32 --verbose "$signed" >/dev/null
   cert="$("$APKSIGNER" verify --print-certs "$signed" | awk -F': ' '/Signer #1 certificate SHA-256 digest:/ {print tolower($2); exit}')"
   [[ "$cert" == "$CERT" ]] || { echo "signer mismatch: $(basename "$signed")" >&2; exit 1; }
   badging="$("$AAPT" dump badging "$signed")"
