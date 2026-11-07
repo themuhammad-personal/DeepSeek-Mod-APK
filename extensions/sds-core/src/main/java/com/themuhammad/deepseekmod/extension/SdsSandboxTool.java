@@ -97,28 +97,28 @@ public final class SdsSandboxTool {
                         SdsSandboxConfig.MAX_TIMEOUT_SECONDS * 1000L);
                 long timeoutSeconds = Math.max(1L, timeoutMs / 1000L);
 
-                java.util.List<String> arguments = new java.util.ArrayList<>();
-                arguments.add(launcher.getAbsolutePath());
-                arguments.add("-r");
-                arguments.add(rootfs.getAbsolutePath());
-                arguments.add("-0");
-                arguments.add("--link2symlink");
+                java.util.List<String> commandLine = new java.util.ArrayList<>();
+                commandLine.add(launcher.getAbsolutePath());
+                commandLine.add("-r");
+                commandLine.add(rootfs.getAbsolutePath());
+                commandLine.add("-0");
+                commandLine.add("--link2symlink");
                 // The device nodes and the process list of the app are bound into
                 // the guest, the same way the reference design of the proof of
                 // concept did it. A path that does not exist on the device is
                 // skipped, because PRoot refuses to start for a missing bind.
                 for (String bind : new String[]{"/dev", "/proc"}) {
                     if (new File(bind).isDirectory()) {
-                        arguments.add("-b");
-                        arguments.add(bind);
+                        commandLine.add("-b");
+                        commandLine.add(bind);
                     }
                 }
-                arguments.add("-w");
-                arguments.add("/root");
-                arguments.add("/bin/sh");
-                arguments.add("-c");
-                arguments.add(command);
-                ProcessBuilder builder = new ProcessBuilder(arguments);
+                commandLine.add("-w");
+                commandLine.add("/root");
+                commandLine.add("/bin/sh");
+                commandLine.add("-c");
+                commandLine.add(command);
+                ProcessBuilder builder = new ProcessBuilder(commandLine);
                 builder.redirectErrorStream(true);
                 Map<String, String> environment = builder.environment();
                 // The temporary directory of PRoot has to be writable by the app,
