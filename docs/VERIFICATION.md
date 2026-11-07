@@ -40,6 +40,12 @@ correct callback frequency, threading, Compose rendering or real-device executio
 - the original launcher Activity is still declared and the Agent Console Activity is added, declared as not exported and without a launcher filter;
 - each hook call site reads the register that the original code just wrote, proven against the
   patched DEX rather than assumed;
+- the guarded prompt is written back into the register that the original code reads, so the
+  change of the prompt really reaches the request;
+- the observer of the streaming set path runs after the update of the content, so it sees the
+  value that the app stores;
+- every class of the extension is really in the bundle of the patched APK, so a module cannot be
+  missing without the verification failing;
 - the chat entry call site sits directly in front of the return of `MainActivity.onCreate`, so
   the original code of the activity runs completely before the entry is added;
 - the patch introduces no reference to a type that is not defined in any DEX file. The official
@@ -48,8 +54,12 @@ correct callback frequency, threading, Compose rendering or real-device executio
 
 ## Local checks
 
-    bash scripts/test-agent-core.sh
-    gradle --no-daemon buildAndroid
+    bash scripts/test-agent-core.sh      # needs a JDK, runs the plain-Java regression test
+    gradle --no-daemon buildAndroid      # builds the patch bundle and the extension
+    python3 scripts/verify_patched_hooks.py --apk <patched.apk> --dex-dir <dex-dir>
+
+The CI runs the same test on every push. The last CI result is the reference for
+the state of the branch.
 
 ## Manual device checks still required
 
@@ -65,3 +75,13 @@ correct callback frequency, threading, Compose rendering or real-device executio
   behaves exactly as before with the patch enabled and with it disabled.
 - Confirm that the memories, the projects, the artifacts, the slash commands and the Generative
   UI survive an app restart and that the files stay inside the app-private directory.
+- Confirm that the switches of the console survive a restart of the app and that the proposal
+  mode is off again after a fresh installation.
+- Add an MCP server with an https address, turn the network switch on, ask for the list of the
+  tools and confirm that the call needs an approval that shows the address.
+- Ask for a research address and confirm that the exact address is shown before anything is
+  fetched and that nothing is fetched while the network switch is off.
+- Try to leave the workspace with a path like `../sds-settings.xml` and confirm that the tool
+  refuses it.
+- Confirm that the export writes through the system file picker and that a cancelled export
+  leaves no file behind.

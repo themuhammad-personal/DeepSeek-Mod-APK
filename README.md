@@ -2,7 +2,7 @@
 
 A custom Morphe Patcher project for building native Android feature patches for the official DeepSeek application.
 
-The user's Super-Deepseek- repository is the feature and UX reference, not source code to copy into the APK. Browser-only modules are redesigned as Android-native DEX extensions and narrow Morphe patches.
+The user's Super-Deepseek- repository is the feature and UX reference, not source code to copy into the APK. Browser-only modules are redesigned as Android-native DEX extensions and narrow Morphe patches. **No JavaScript, CSS or WebView content is injected into the app.**
 
 > Independent project. Not affiliated with or endorsed by DeepSeek or Morphe. The official DeepSeek APK, decoded sources, credentials and signing keys are not committed.
 
@@ -17,24 +17,26 @@ The user's Super-Deepseek- repository is the feature and UX reference, not sourc
 
 See docs/TARGET-APK.md before supporting another release.
 
-## Implemented
+## What is implemented
 
-- Morphe Patcher project with successful MPP bundle CI.
-- Version-scoped fingerprints for the exact prompt serializer and mutable streaming ResponseFragment SET/APPEND methods.
-- Compatibility gate and optional launcher label patch.
-- DEX extension with approval-first policy defaults, strict bounded tool proposal parser, and app-private workspace path guard.
-- Default-off experimental hooks: add tool-format guidance to the prompt and observe the complete accumulated content after SSE ResponseFragment SET/APPEND mutations.
-- A separate, default-off Native Agent Console Activity to enable session-only proposal mode, refresh the proposal queue, copy arguments, dismiss proposals, or clear the queue.
-- Device-free Java regression tests for parsing, queue bounds, proposal snapshot/dismiss, execution policy, and path confinement.
-- A manual verification workflow that applies selected patches to an exact hash-pinned APK and checks package, version, signing validity, manifest Activity, and merged extension DEX.
+**Native runtime (DEX extension `extensions/sds-core`)**
 
-## Agent scope and limitations
+- The agent runtime: a session state machine with proposals, approval, deny, cancel and a stop control, an activity timeline and bounded diagnostics.
+- An allow-listed tool executor with a strict schema per tool, an explicit approval, a timeout, cancellation, bounded output and the workspace as the only place a file tool may touch.
+- The built-in file tools: list, read and write inside the app-private workspace, with canonical path confinement.
+- The memories, the projects, the slash commands and the Generative UI surface.
+- The artifacts and the export through the system file picker and the system share sheet.
+- The MCP client: JSON-RPC 2.0 over https, no redirect, a bounded answer, the tools of a server as native tools.
+- The research retrieval: one https address at a time, shown to the user before it is fetched.
+- The Linux Studio: a code-only module that refuses to run until the PRoot runtime is bundled. PRoot runs under the app UID and is **not** a kernel sandbox.
 
-The response observer now targets the native SSE JSON-delta mutation path: SseMessageRoot → mutable response model → SET/APPEND → ResponseFragment.content. In the inspected 2.7.4 Smali, APPEND passes the full accumulated content string after combining the previous content and incoming chunk. This is a better static hook than observing the separate static response-fragment deserializer.
+**Morphe patches (`patches/`)** — a compatibility gate that proves the shape of the three seams before anything is touched, and three default-off runtime patches: the hooks, the console and the entry in the chat screen.
 
-This is still static evidence, not a device-verified runtime callback. The hooks are disabled by default. The Console is a separate launcher Activity, not yet embedded in the main chat UI. No shell command, MCP request, network tool, file write, automatic approval, or tool-result handoff is implemented. The response callback frequency and Compose renderer lifecycle still require real-device verification. This is not yet a complete multi-turn AI agent.
+**Verification** — a plain-Java regression test of the runtime, a build of the patch bundle and a verification that applies the patches to a hash-pinned target and inspects the patched DEX.
 
-See docs/DEEPSEEK-STREAM-TRACE.md, docs/AGENT-RUNTIME-FOUNDATION.md, docs/NATIVE-AGENT-CONSOLE.md and docs/FEATURE-PORT-MAP.md.
+## What is not proven
+
+The runtime is **statically traced, build-verified and patch-applied**. It is **not device-runtime-verified**: the callback frequency of the observer, the behaviour of the Compose renderer, the login flow and the touch behaviour of the chat entry still need a real device with the official 2.7.4 and an account. The Linux Studio cannot run until the PRoot binaries and the root filesystem are bundled, and the exact 2.7.4 binary is not obtainable from the public endpoint any more, so the apply verification waits for the owner-supplied pinned source.
 
 ## Build
 
@@ -48,23 +50,26 @@ The MPP bundle is produced in patches/build/libs/. For a test build select these
 1. DeepSeek 2.7.4 compatibility check
 2. Native Agent hook points (experimental)
 3. Super DeepSeek native Agent Console
+4. Super DeepSeek native Agent chat entry
 
-The hook and console patches are disabled by default and only target the exact inspected APK version.
+The three runtime patches are disabled by default and only target the exact inspected APK version.
 
 ## APK apply verification
 
 The exact source APK must match the inspected 2.7.4 SHA-256. The current official download URL is a moving latest-version endpoint and has returned a different binary, so the verification workflow safely stops before applying old fingerprints. Supply a stable HTTPS URL and SHA-256 for the exact inspected APK; never change the hash to match an uninspected release.
 
-See the manual Verify Morphe patch against official DeepSeek APK workflow. It deletes temporary APKs after checking and does not publish them.
+The verification workflow deletes the temporary APKs after checking them and does not publish them.
 
 ## Security and identity
 
 - Preserve official account sign-in and session behaviour.
 - Do not bypass CAPTCHA, anti-fraud, anti-tamper, signature, root-detection, device-integrity or risk checks.
 - Do not intercept TLS, install user certificates, extract session tokens or rewrite authentication requests.
-- Model output is untrusted. Tool proposals are never executed by this branch.
+- Model output is untrusted. No tool runs without an explicit approval of the user.
+- The Agent Console is not exported and has no launcher entry, so no other app can open it.
+- The network is off by default, only https is used and a redirect is never followed.
 - A re-signed APK will not use DeepSeek's original certificate and may not update the official installation in place. Keep the official installation and its data intact until a separate build is verified.
-- PRoot, if introduced later, runs under the app UID and is not a kernel-level security boundary.
+- PRoot runs under the app UID and is not a kernel-level security boundary.
 - Check applicable app terms and third-party licenses before distributing patches or modified binaries.
 
 ## Project map
@@ -75,5 +80,7 @@ See the manual Verify Morphe patch against official DeepSeek APK workflow. It de
 - docs/FEATURE-PORT-MAP.md
 - docs/AGENT-RUNTIME-FOUNDATION.md
 - docs/NATIVE-AGENT-CONSOLE.md
+- docs/NATIVE-FEATURE-MODULES.md
 - docs/SECURITY-BOUNDARIES.md
 - docs/VERIFICATION.md
+- docs/P0-VERIFICATION.md
