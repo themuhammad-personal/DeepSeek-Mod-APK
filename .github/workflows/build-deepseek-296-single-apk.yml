@@ -2,18 +2,6 @@ name: Build DeepSeek 2.7.5 (296) from the owner's single Drive APK
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - "final/2.7.5-296-split-apk"
-    paths:
-      - ".github/workflows/build-deepseek-296-single-apk.yml"
-      - "patches/**"
-      - "extensions/**"
-      - "scripts/verify_fingerprints.py"
-      - "scripts/verify_patched_hooks.py"
-      - "scripts/verify_login_untouched.py"
-      - "scripts/verify_native_only.py"
-
 permissions:
   contents: read
   packages: read
@@ -218,29 +206,23 @@ jobs:
         run: |
           set -euo pipefail
           KEYSTORE="$RUNNER_TEMP/deepseek-296/release.jks"
-          if [[ -n "$SIGNING_KEY_BASE64" ]]; then
-            [[ -n "$KEYSTORE_PASSWORD" && -n "$KEY_PASSWORD" && -n "$KEY_ALIAS" ]] || {
-              echo "::error::Configure all four SDS signing secrets."
-              exit 2
-            }
-            printf '%s' "$SIGNING_KEY_BASE64" | base64 --decode > "$KEYSTORE"
-            echo "Persistent signing key loaded."
-          else
-            export KEYSTORE_PASSWORD="sds-temporary-$GITHUB_RUN_ID"
-            export KEY_PASSWORD="$KEYSTORE_PASSWORD"
-            export KEY_ALIAS="sds-temporary"
-            keytool -genkeypair -v -keystore "$KEYSTORE" -storetype JKS \
-              -alias "$KEY_ALIAS" -keyalg RSA -keysize 3072 -validity 10000 \
-              -storepass "$KEYSTORE_PASSWORD" -keypass "$KEY_PASSWORD" \
-              -dname "CN=Super DeepSeek Mod, OU=Android, O=Owner Build, L=Dhaka, S=BD, C=BD" >/dev/null
-            echo "::warning::Temporary signing key created. Configure persistent signing secrets before installing if future update builds are needed."
-          fi
+          [[ -n "$SIGNING_KEY_BASE64" && -n "$KEYSTORE_PASSWORD" && -n "$KEY_PASSWORD" && -n "$KEY_ALIAS" ]] || {
+            echo "::error::Persistent signing secrets are required. No temporary key is allowed for this branch."
+            exit 2
+          }
+          [[ "$KEY_ALIAS" == "superdeepSeek" ]] || {
+            echo "::error::SDS_KEY_ALIAS must be superdeepSeek."
+            exit 2
+          }
+          printf '%s' "$SIGNING_KEY_BASE64" | base64 --decode > "$KEYSTORE"
+          keytool -list -keystore "$KEYSTORE" -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" >/dev/null
+          echo "Persistent superdeepSeek signing key loaded."
           {
             echo "SDS_KEYSTORE=$KEYSTORE"
             echo "SDS_KEY_ALIAS=$KEY_ALIAS"
             echo "SDS_KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD"
             echo "SDS_KEY_PASSWORD=$KEY_PASSWORD"
-            if [[ -n "$SIGNING_KEY_BASE64" ]]; then echo "SDS_PERSISTENT_KEY=true"; else echo "SDS_PERSISTENT_KEY=false"; fi
+            echo "SDS_PERSISTENT_KEY=true"
           } >> "$GITHUB_ENV"
 
       - name: Align and sign the patched standalone APK
