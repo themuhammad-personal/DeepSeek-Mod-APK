@@ -40,8 +40,13 @@ EXTENSION_PACKAGE = "Lcom/themuhammad/deepseekmod/extension/"
 
 # The patcher merges the Kotlin runtime into the app, because the patch bundle
 # is written in Kotlin. Those classes are the standard library of Kotlin and
-# they are not a change of the app itself.
-KOTLIN_RUNTIME = ("Lkotlin/", "Lkotlinx/")
+# the annotations of the Kotlin compiler. They are not a change of the app.
+KOTLIN_RUNTIME = (
+    "Lkotlin/",
+    "Lkotlinx/",
+    "Lorg/intellij/lang/annotations/",
+    "Lorg/jetbrains/annotations/",
+)
 
 # The methods that the patches are allowed to change. The names are the ones
 # of the build that is being patched, so the script reads the version code of
@@ -185,6 +190,14 @@ def main() -> int:
     runtime = [name for name in new_classes if name.startswith(KOTLIN_RUNTIME)]
     print(f"classes that were added: {len(new_classes)}")
     print(f"  of those {len(runtime)} classes of the Kotlin runtime")
+    prefixes: dict[str, int] = {}
+    for name in new_classes:
+        parts = name.split("/")
+        prefix = "/".join(parts[:3]) if len(parts) > 2 else name
+        prefixes[prefix] = prefixes.get(prefix, 0) + 1
+    print("  the added classes by package: " + ", ".join(
+        f"{prefix} ({count})" for prefix, count in sorted(prefixes.items())
+    ))
     if foreign:
         failures += 1
         print("FAILED: classes that do not belong to the extension were added")
