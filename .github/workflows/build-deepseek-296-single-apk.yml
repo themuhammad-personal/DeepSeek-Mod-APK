@@ -237,11 +237,23 @@ jobs:
             echo "SDS_PERSISTENT_KEY=true"
           } >> "$GITHUB_ENV"
 
-      - name: Align and sign the patched standalone APK
+      - name: Sign baseline and patched APKs with the same persistent key
         shell: bash
         run: |
           set -euo pipefail
           BT="$ANDROID_HOME/build-tools/36.0.0"
+          # Diagnostic baseline: the exact Drive APK, with no Morphe patch.
+          "$BT/zipalign" -f -p 4 \
+            "$RUNNER_TEMP/deepseek-296/official-from-owner-drive.apk" \
+            "$RUNNER_TEMP/deepseek-296/baseline-aligned.apk"
+          "$BT/apksigner" sign \
+            --ks "$SDS_KEYSTORE" \
+            --ks-key-alias "$SDS_KEY_ALIAS" \
+            --ks-pass env:SDS_KEYSTORE_PASSWORD \
+            --key-pass env:SDS_KEY_PASSWORD \
+            --out "$RUNNER_TEMP/deepseek-296/deepseek-baseline-2.7.5-296.apk" \
+            "$RUNNER_TEMP/deepseek-296/baseline-aligned.apk"
+          # The patched build is signed by the very same key.
           "$BT/zipalign" -f -p 4 \
             "$RUNNER_TEMP/deepseek-296/patched-morphe.apk" \
             "$RUNNER_TEMP/deepseek-296/patched-aligned.apk"
@@ -252,9 +264,19 @@ jobs:
             --key-pass env:SDS_KEY_PASSWORD \
             --out "$RUNNER_TEMP/deepseek-296/deepseek-mod-2.7.5-296.apk" \
             "$RUNNER_TEMP/deepseek-296/patched-aligned.apk"
+          "$BT/apksigner" verify --verbose "$RUNNER_TEMP/deepseek-296/deepseek-baseline-2.7.5-296.apk"
           "$BT/apksigner" verify --verbose "$RUNNER_TEMP/deepseek-296/deepseek-mod-2.7.5-296.apk"
-          "$BT/aapt" dump badging "$RUNNER_TEMP/deepseek-296/deepseek-mod-2.7.5-296.apk" \
-            | grep -F "package: name='com.deepseek.chat' versionCode='296' versionName='2.7.5'"
+          BASE_CERT="$("$BT/apksigner" verify --print-certs "$RUNNER_TEMP/deepseek-296/deepseek-baseline-2.7.5-296.apk" | awk -F': ' '/Signer #1 certificate SHA-256 digest:/ {print tolower($2); exit}')"
+          PATCH_CERT="$("$BT/apksigner" verify --print-certs "$RUNNER_TEMP/deepseek-296/deepseek-mod-2.7.5-296.apk" | awk -F': ' '/Signer #1 certificate SHA-256 digest:/ {print tolower($2); exit}')"
+          [[ -n "$BASE_CERT" && "$BASE_CERT" == "$PATCH_CERT" ]] || {
+            echo "::error::The diagnostic baseline and patched APK do not have the same signing certificate."
+            exit 1
+          }
+          for apk in "$RUNNER_TEMP/deepseek-296/deepseek-baseline-2.7.5-296.apk" "$RUNNER_TEMP/deepseek-296/deepseek-mod-2.7.5-296.apk"; do
+            "$BT/aapt" dump badging "$apk" | grep -F "package: name='com.deepseek.chat' versionCode='296' versionName='2.7.5'"
+          done
+          echo "$BASE_CERT" > "$RUNNER_TEMP/deepseek-296/superdeepSeek-certificate.sha256"
+          echo "Baseline and patched APKs use the same superdeepSeek signing certificate: $BASE_CERT"
 
       - name: Verify login and native app after final signing
         shell: bash
@@ -272,31 +294,32 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/deepseek-296/artifact"
+          cp "$RUNNER_TEMP/deepseek-296/deepseek-baseline-2.7.5-296.apk" "$RUNNER_TEMP/deepseek-296/artifact/"
           cp "$RUNNER_TEMP/deepseek-296/deepseek-mod-2.7.5-296.apk" "$RUNNER_TEMP/deepseek-296/artifact/"
+          cp "$RUNNER_TEMP/deepseek-296/superdeepSeek-certificate.sha256" "$RUNNER_TEMP/deepseek-296/artifact/"
           (
             cd "$RUNNER_TEMP/deepseek-296/artifact"
+            sha256sum deepseek-baseline-2.7.5-296.apk > deepseek-baseline-2.7.5-296.apk.sha256
             sha256sum deepseek-mod-2.7.5-296.apk > deepseek-mod-2.7.5-296.apk.sha256
           )
           SOURCE_SHA="$(awk '{print $1}' "$RUNNER_TEMP/deepseek-296/source.sha256")"
           {
-            echo "## DeepSeek 2.7.5 / versionCode 296 — single APK"
+            echo "## DeepSeek 2.7.5 / versionCode 296 — A/B diagnostic APKs"
             echo
+            BASELINE_SHA="$(sha256sum "$RUNNER_TEMP/deepseek-296/deepseek-baseline-2.7.5-296.apk" | awk '{print $1}')"
             PATCHED_SHA="$(sha256sum "$RUNNER_TEMP/deepseek-296/deepseek-mod-2.7.5-296.apk" | awk '{print $1}')"
             echo "- Source: exact Google Drive file ID 1r4__RT5nFRmkfxHuK4sLWgGeNXGKbS3o supplied by the owner."
             echo "- Source APK SHA-256: $SOURCE_SHA"
+            echo "- Baseline (same source, no Morphe patches) SHA-256: $BASELINE_SHA"
             echo "- Patched APK SHA-256: $PATCHED_SHA"
-            echo "- All four Morphe patches applied and static verification passed."
-            echo "- Persistent signing key: $SDS_PERSISTENT_KEY"
-            if [[ "$SDS_PERSISTENT_KEY" != "true" ]]; then
-              echo
-              echo "WARNING: one-run signing key; later builds cannot update this installation."
-            fi
+            echo "- Both APKs use the same persistent superdeepSeek certificate."
+            echo "- The patched APK passed hook, login-untouched and native-only static checks."
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Upload the patched APK
+      - name: Upload baseline and patched APKs for A/B testing
         uses: actions/upload-artifact@v4
         with:
-          name: deepseek-mod-2.7.5-296-apk
+          name: deepseek-2.7.5-296-ab-test
           path: ${{ runner.temp }}/deepseek-296/artifact/*
           if-no-files-found: error
           retention-days: 7
