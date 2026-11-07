@@ -25,6 +25,7 @@ public final class SdsAgentHooks {
     private static volatile boolean enabled;
     private static final AtomicLong PROMPT_HOOK_CALLS = new AtomicLong();
     private static final AtomicLong PROMPT_HOOK_FAILURES = new AtomicLong();
+    private static final AtomicLong RESPONSE_HOOK_FAILURES = new AtomicLong();
     private static final ArrayDeque<SdsToolCall> PENDING = new ArrayDeque<>();
     private static final Set<String> SEEN_IDS = new HashSet<>();
 
@@ -55,7 +56,15 @@ public final class SdsAgentHooks {
     /** Request-hook counters help distinguish a local hook failure from a server/network failure. */
     public static String promptHookSummary() {
         return "request hook calls " + PROMPT_HOOK_CALLS.get()
-                + " | fail-open " + PROMPT_HOOK_FAILURES.get();
+                + " | fail-open " + PROMPT_HOOK_FAILURES.get()
+                + " | response hook errors " + RESPONSE_HOOK_FAILURES.get();
+    }
+
+    /** Clears only diagnostic counters; it does not change Agent policy or pending proposals. */
+    public static void resetHookDiagnostics() {
+        PROMPT_HOOK_CALLS.set(0L);
+        PROMPT_HOOK_FAILURES.set(0L);
+        RESPONSE_HOOK_FAILURES.set(0L);
     }
 
     /**
@@ -72,6 +81,7 @@ public final class SdsAgentHooks {
             SdsObserverDiagnostics.get().onResponse(completeContent);
         } catch (Throwable ignored) {
             // Diagnostics must never interrupt the official response stream.
+            RESPONSE_HOOK_FAILURES.incrementAndGet();
         }
         if (!enabled) return;
         try {
@@ -88,6 +98,7 @@ public final class SdsAgentHooks {
             }
         } catch (Throwable ignored) {
             // Parsing an optional Agent proposal must never interrupt chat rendering.
+            RESPONSE_HOOK_FAILURES.incrementAndGet();
         }
     }
 
@@ -107,6 +118,7 @@ public final class SdsAgentHooks {
             return SdsToolResultHandoff.applyTo(completeContent);
         } catch (Throwable ignored) {
             // Fail open: always return the original response content to DeepSeek.
+            RESPONSE_HOOK_FAILURES.incrementAndGet();
             return completeContent;
         }
     }
