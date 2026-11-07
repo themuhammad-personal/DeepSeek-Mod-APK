@@ -61,28 +61,35 @@ public final class SdsWorkspaceTools {
 
         @Override
         public SdsToolResult execute(SdsToolContext context, SdsToolCall call) throws Exception {
-            SdsToolArguments arguments = SdsToolArguments.parse(call.getArgumentsJson());
-            arguments.requireOnly("path", "depth");
-            String path = arguments.getString("path", ".");
-            int depth = arguments.getInt("depth", 1);
-            if (depth < 1) depth = 1;
-            if (depth > MAX_DEPTH) depth = MAX_DEPTH;
+            try {
+                SdsToolArguments arguments = SdsToolArguments.parse(call.getArgumentsJson());
+                arguments.requireOnly("path", "depth");
+                String path = arguments.getString("path", ".");
+                int depth = arguments.getInt("depth", 1);
+                if (depth < 1) depth = 1;
+                if (depth > MAX_DEPTH) depth = MAX_DEPTH;
 
-            File root = SdsWorkspaceGuard.resolveWithin(context.getWorkspace(), path);
-            if (!root.exists()) {
-                return new SdsToolResult(SdsToolResult.Status.FAILED, "", "the path does not exist");
+                File root = SdsWorkspaceGuard.resolveWithin(context.getWorkspace(), path);
+                if (!root.exists()) {
+                    return new SdsToolResult(SdsToolResult.Status.FAILED, "", "the path does not exist");
+                }
+                if (!root.isDirectory()) {
+                    return new SdsToolResult(SdsToolResult.Status.FAILED, "", "the path is not a directory");
+                }
+                List<String> lines = new ArrayList<>();
+                collect(root, "", depth, lines, context);
+                StringBuilder output = new StringBuilder();
+                for (String line : lines) {
+                    if (output.length() > 0) output.append('\n');
+                    output.append(line);
+                }
+                return new SdsToolResult(SdsToolResult.Status.SUCCESS, output.toString(), "");
+            } catch (SecurityException refused) {
+                return new SdsToolResult(SdsToolResult.Status.FAILED, "", "the path was refused");
+            } catch (IllegalArgumentException invalid) {
+                return new SdsToolResult(SdsToolResult.Status.FAILED, "",
+                        "the arguments did not match the schema");
             }
-            if (!root.isDirectory()) {
-                return new SdsToolResult(SdsToolResult.Status.FAILED, "", "the path is not a directory");
-            }
-            List<String> lines = new ArrayList<>();
-            collect(root, "", depth, lines, context);
-            StringBuilder output = new StringBuilder();
-            for (String line : lines) {
-                if (output.length() > 0) output.append('\n');
-                output.append(line);
-            }
-            return new SdsToolResult(SdsToolResult.Status.SUCCESS, output.toString(), "");
         }
 
         private void collect(File directory, String prefix, int depth, List<String> lines,
@@ -126,26 +133,33 @@ public final class SdsWorkspaceTools {
         public boolean requiresNetwork() { return false; }
 
         @Override
-        public SdsToolResult execute(SdsToolContext context, SdsToolCall call) throws IOException {
-            SdsToolArguments arguments = SdsToolArguments.parse(call.getArgumentsJson());
-            arguments.requireOnly("path", "maxChars");
-            String path = arguments.requireString("path");
-            int maxChars = arguments.getInt("maxChars", 4096);
-            if (maxChars < 1) maxChars = 1;
-            if (maxChars > MAX_READ_CHARS) maxChars = MAX_READ_CHARS;
+        public SdsToolResult execute(SdsToolContext context, SdsToolCall call) throws Exception {
+            try {
+                SdsToolArguments arguments = SdsToolArguments.parse(call.getArgumentsJson());
+                arguments.requireOnly("path", "maxChars");
+                String path = arguments.requireString("path");
+                int maxChars = arguments.getInt("maxChars", 4096);
+                if (maxChars < 1) maxChars = 1;
+                if (maxChars > MAX_READ_CHARS) maxChars = MAX_READ_CHARS;
 
-            File target = SdsWorkspaceGuard.resolveWithin(context.getWorkspace(), path);
-            if (!target.exists()) {
-                return new SdsToolResult(SdsToolResult.Status.FAILED, "", "the file does not exist");
+                File target = SdsWorkspaceGuard.resolveWithin(context.getWorkspace(), path);
+                if (!target.exists()) {
+                    return new SdsToolResult(SdsToolResult.Status.FAILED, "", "the file does not exist");
+                }
+                if (target.isDirectory()) {
+                    return new SdsToolResult(SdsToolResult.Status.FAILED, "", "the path is a directory");
+                }
+                if (target.length() > maxChars * 4L) {
+                    return new SdsToolResult(SdsToolResult.Status.FAILED, "", "the file is larger than the limit");
+                }
+                byte[] content = readBounded(target, maxChars);
+                return new SdsToolResult(SdsToolResult.Status.SUCCESS, new String(content, "UTF-8"), "");
+            } catch (SecurityException refused) {
+                return new SdsToolResult(SdsToolResult.Status.FAILED, "", "the path was refused");
+            } catch (IllegalArgumentException invalid) {
+                return new SdsToolResult(SdsToolResult.Status.FAILED, "",
+                        "the arguments did not match the schema");
             }
-            if (target.isDirectory()) {
-                return new SdsToolResult(SdsToolResult.Status.FAILED, "", "the path is a directory");
-            }
-            if (target.length() > maxChars * 4L) {
-                return new SdsToolResult(SdsToolResult.Status.FAILED, "", "the file is larger than the limit");
-            }
-            byte[] content = readBounded(target, maxChars);
-            return new SdsToolResult(SdsToolResult.Status.SUCCESS, new String(content, "UTF-8"), "");
         }
     }
 
@@ -167,39 +181,47 @@ public final class SdsWorkspaceTools {
         public boolean requiresNetwork() { return false; }
 
         @Override
-        public SdsToolResult execute(SdsToolContext context, SdsToolCall call) throws IOException {
-            SdsToolArguments arguments = SdsToolArguments.parse(call.getArgumentsJson());
-            arguments.requireOnly("path", "content");
-            String path = arguments.requireString("path");
-            String content = arguments.requireString("content");
-            if (content.length() > MAX_WRITE_CHARS) {
-                return new SdsToolResult(SdsToolResult.Status.FAILED, "",
-                        "the content exceeds the " + MAX_WRITE_CHARS + " character limit");
-            }
-            File target = SdsWorkspaceGuard.resolveWithin(context.getWorkspace(), path);
-            File parent = target.getParentFile();
-            if (parent != null && !parent.exists() && !parent.mkdirs()) {
-                return new SdsToolResult(SdsToolResult.Status.FAILED, "", "the directory could not be created");
-            }
-            if (target.exists() && target.isDirectory()) {
-                return new SdsToolResult(SdsToolResult.Status.FAILED, "", "the path is a directory");
-            }
-            OutputStream output = null;
+        public SdsToolResult execute(SdsToolContext context, SdsToolCall call) throws Exception {
             try {
-                output = new FileOutputStream(target);
-                output.write(content.getBytes("UTF-8"));
-                output.flush();
-            } finally {
-                if (output != null) {
-                    try {
-                        output.close();
-                    } catch (IOException ignored) {
-                        // The file is closed either way; the result reports the write.
+                SdsToolArguments arguments = SdsToolArguments.parse(call.getArgumentsJson());
+                arguments.requireOnly("path", "content");
+                String path = arguments.requireString("path");
+                String content = arguments.requireString("content");
+                if (content.length() > MAX_WRITE_CHARS) {
+                    return new SdsToolResult(SdsToolResult.Status.FAILED, "",
+                            "the content exceeds the " + MAX_WRITE_CHARS + " character limit");
+                }
+                File target = SdsWorkspaceGuard.resolveWithin(context.getWorkspace(), path);
+                File parent = target.getParentFile();
+                if (parent != null && !parent.exists() && !parent.mkdirs()) {
+                    return new SdsToolResult(SdsToolResult.Status.FAILED, "",
+                            "the directory could not be created");
+                }
+                if (target.exists() && target.isDirectory()) {
+                    return new SdsToolResult(SdsToolResult.Status.FAILED, "", "the path is a directory");
+                }
+                OutputStream output = null;
+                try {
+                    output = new FileOutputStream(target);
+                    output.write(content.getBytes("UTF-8"));
+                    output.flush();
+                } finally {
+                    if (output != null) {
+                        try {
+                            output.close();
+                        } catch (IOException ignored) {
+                            // The file is closed either way; the result reports the write.
+                        }
                     }
                 }
+                return new SdsToolResult(SdsToolResult.Status.SUCCESS,
+                        "wrote " + content.length() + " characters", "");
+            } catch (SecurityException refused) {
+                return new SdsToolResult(SdsToolResult.Status.FAILED, "", "the path was refused");
+            } catch (IllegalArgumentException invalid) {
+                return new SdsToolResult(SdsToolResult.Status.FAILED, "",
+                        "the arguments did not match the schema");
             }
-            return new SdsToolResult(SdsToolResult.Status.SUCCESS,
-                    "wrote " + content.length() + " characters", "");
         }
     }
 
