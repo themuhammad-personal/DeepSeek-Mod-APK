@@ -112,12 +112,6 @@ for signed in "$WORK/signed"/*.apk; do
     grep -q "versionName='2.7.5'" <<<"$badging"
   fi
 done
-  badging="$("$AAPT" dump badging "$signed")"
-  grep -q "package: name='com.deepseek.chat' versionCode='296'" <<<"$badging"
-  if [[ "$(basename "$signed")" == "base.apk" ]]; then
-    grep -q "versionName='2.7.5'" <<<"$badging"
-  fi
-done
 python3 - "$SOURCE_APKS" "$WORK/signed" "$OUTPUT_APKS" <<'PY'
 import pathlib, sys, zipfile
 source, signed, output = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2]), pathlib.Path(sys.argv[3])
