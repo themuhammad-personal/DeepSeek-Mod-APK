@@ -90,6 +90,9 @@ public final class SdsAgentSession {
             }
             pendingCallId = call.getId();
             pendingToolName = call.getName();
+            // A new proposal is a new turn, so the cancellation of an earlier
+            // turn must not stop this one before it even starts.
+            cancellation.reset();
             state = State.COLLECTING;
             record(SdsAgentEvent.Type.PROPOSAL_RECEIVED, call.getName());
             return true;

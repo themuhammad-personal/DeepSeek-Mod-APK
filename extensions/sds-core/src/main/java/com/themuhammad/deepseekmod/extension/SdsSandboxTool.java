@@ -113,40 +113,64 @@ public final class SdsSandboxTool {
                         "PROROOT_TMP_DIR", "HOME", "PATH", "TERM", "TMPDIR"));
 
                 Process process = builder.start();
-                StringBuilder output = new StringBuilder();
-                boolean truncated = false;
-                BufferedReader reader = new BufferedReader(
-                        new InputStreamReader(process.getInputStream(), "UTF-8"));
-                try {
-                    String line;
-                    while ((line = reader.readLine()) != null) {
-                        if (output.length() + line.length() + 1 > SdsSandboxConfig.MAX_OUTPUT_CHARS) {
-                            truncated = true;
-                            break;
+                // The output is read by a second thread. Reading it in the same
+                // thread would block on the pipe, and the timeout could then never
+                // be enforced.
+                final StringBuilder output = new StringBuilder();
+                final boolean[] truncated = new boolean[]{false};
+                Thread reader = new Thread(new Runnable() {
+                    @Override
+                    public void run() {
+                        BufferedReader lines = null;
+                        try {
+                            lines = new BufferedReader(
+                                    new InputStreamReader(process.getInputStream(), "UTF-8"));
+                            String line;
+                            while ((line = lines.readLine()) != null) {
+                                synchronized (output) {
+                                    if (output.length() + line.length() + 1
+                                            > SdsSandboxConfig.MAX_OUTPUT_CHARS) {
+                                        truncated[0] = true;
+                                        break;
+                                    }
+                                    output.append(line).append('\n');
+                                }
+                            }
+                        } catch (java.io.IOException ignored) {
+                            // The process ended, so the stream is closed.
+                        } finally {
+                            if (lines != null) {
+                                try {
+                                    lines.close();
+                                } catch (java.io.IOException ignored) {
+                                    // Nothing else can be done here.
+                                }
+                            }
                         }
-                        output.append(line).append('\n');
-                        if (context.isCancelled()) break;
                     }
-                } finally {
-                    reader.close();
-                }
+                }, "sds-sandbox-output");
+                reader.setDaemon(true);
+                reader.start();
+
                 int exitCode = -1;
-                if (!context.isCancelled()) {
-                    if (!process.waitFor(timeoutSeconds, TimeUnit.SECONDS)) {
-                        process.destroyForcibly();
-                        return new SdsToolResult(SdsToolResult.Status.TIMED_OUT, output.toString(),
-                                "the command did not finish in time");
-                    }
-                    exitCode = process.exitValue();
-                } else {
+                if (context.isCancelled()) {
                     process.destroyForcibly();
-                    return new SdsToolResult(SdsToolResult.Status.CANCELLED, output.toString(),
+                    return new SdsToolResult(SdsToolResult.Status.CANCELLED, snapshot(output),
                             "the command was stopped");
                 }
-                if (truncated) {
-                    output.append("[output truncated]\n");
+                if (!process.waitFor(timeoutSeconds, TimeUnit.SECONDS)) {
+                    process.destroyForcibly();
+                    return new SdsToolResult(SdsToolResult.Status.TIMED_OUT, snapshot(output),
+                            "the command did not finish in time");
                 }
-                return new SdsToolResult(SdsToolResult.Status.SUCCESS, output.toString(),
+                exitCode = process.exitValue();
+                // The reader needs a moment to drain what is left in the pipe.
+                reader.join(500);
+                String text = snapshot(output);
+                if (truncated[0]) {
+                    text = text + "[output truncated]\n";
+                }
+                return new SdsToolResult(SdsToolResult.Status.SUCCESS, text,
                         exitCode == 0 ? "" : "the command exited with " + exitCode);
             } catch (IllegalArgumentException refused) {
                 return new SdsToolResult(SdsToolResult.Status.FAILED, "",
@@ -155,6 +179,13 @@ public final class SdsSandboxTool {
                 return new SdsToolResult(SdsToolResult.Status.FAILED, "",
                         "the Linux Studio could not be started");
             }
+        }
+    }
+
+    /** A copy of the output that the reader thread may still be filling. */
+    private static String snapshot(StringBuilder output) {
+        synchronized (output) {
+            return output.toString();
         }
     }
 

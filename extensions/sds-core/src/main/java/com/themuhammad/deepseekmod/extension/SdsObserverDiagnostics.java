@@ -22,7 +22,10 @@ import java.util.Set;
 public final class SdsObserverDiagnostics {
     public static final int MAX_EVENTS = 64;
     public static final int MAX_THREADS = 16;
+    public static final int MAX_DIGESTS = 512;
     private static final int DIGEST_CHARS = 16;
+    /** Only the tail of the content is hashed, so a long answer stays cheap. */
+    private static final int DIGEST_TAIL_CHARS = 8 * 1024;
 
     private static final SdsObserverDiagnostics INSTANCE = new SdsObserverDiagnostics();
 
@@ -44,7 +47,8 @@ public final class SdsObserverDiagnostics {
     private long firstCallbackAtMs = -1;
     private long lastCallbackAtMs = -1;
 
-    private SdsObserverDiagnostics() {
+    /** The constructor is package private so that the test can use its own instance. */
+    SdsObserverDiagnostics() {
     }
 
     public static SdsObserverDiagnostics get() {
@@ -85,6 +89,13 @@ public final class SdsObserverDiagnostics {
             if (!seenDigests.contains(digest)) {
                 seenDigests.add(digest);
                 distinctContents++;
+                // The set is bounded, so a long conversation cannot grow it forever.
+                while (seenDigests.size() > MAX_DIGESTS) {
+                    java.util.Iterator<String> oldest = seenDigests.iterator();
+                    if (!oldest.hasNext()) break;
+                    oldest.next();
+                    oldest.remove();
+                }
             } else {
                 duplicateCallbacks++;
             }
@@ -170,7 +181,11 @@ public final class SdsObserverDiagnostics {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             digest.update(salt);
-            byte[] hash = digest.digest(content.getBytes("UTF-8"));
+            // The length and the tail are enough to tell the callbacks apart, and
+            // hashing the whole answer on every callback would be quadratic.
+            digest.update(Integer.toString(content.length()).getBytes("UTF-8"));
+            int from = Math.max(0, content.length() - DIGEST_TAIL_CHARS);
+            byte[] hash = digest.digest(content.substring(from).getBytes("UTF-8"));
             StringBuilder hex = new StringBuilder(DIGEST_CHARS);
             for (int i = 0; i < hash.length && hex.length() < DIGEST_CHARS; i++) {
                 hex.append(String.format("%02x", hash[i]));

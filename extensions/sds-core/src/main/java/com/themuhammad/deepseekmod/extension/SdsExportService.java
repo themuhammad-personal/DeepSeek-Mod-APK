@@ -97,6 +97,12 @@ public final class SdsExportService {
         }
     }
 
+    /** Drops a waiting export, for example when the user cancelled the picker. */
+    public static void clearPending() {
+        pendingContent = null;
+        pendingName = null;
+    }
+
     /** The name of the file the user is about to create. */
     public static String getPendingName() {
         return pendingName;

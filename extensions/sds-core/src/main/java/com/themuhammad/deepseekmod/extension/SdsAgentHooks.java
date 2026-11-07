@@ -35,8 +35,8 @@ public final class SdsAgentHooks {
      * that on. Nothing else about the prompt is changed.
      */
     public static String beforePrompt(String prompt) {
-        if (!enabled) return prompt;
-        String expanded = SdsSlashCommands.expand(prompt == null ? "" : prompt);
+        if (!enabled || prompt == null) return prompt;
+        String expanded = SdsSlashCommands.expand(prompt);
         return expanded + TOOL_GUIDANCE + SdsRuntimeRegistry.memoryPromptBlock();
     }
 

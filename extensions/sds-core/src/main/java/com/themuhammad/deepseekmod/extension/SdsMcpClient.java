@@ -91,7 +91,7 @@ public final class SdsMcpClient {
     public Map<String, Object> call(String method, Map<String, Object> parameters) throws IOException {
         Map<String, Object> request = new LinkedHashMap<>();
         request.put("jsonrpc", "2.0");
-        request.put("id", 1);
+        request.put("id", nextRequestId());
         request.put("method", method);
         if (parameters != null) request.put("params", parameters);
 
@@ -145,6 +145,14 @@ public final class SdsMcpClient {
         } finally {
             if (connection != null) connection.disconnect();
         }
+    }
+
+    private static final java.util.concurrent.atomic.AtomicInteger REQUEST_ID =
+            new java.util.concurrent.atomic.AtomicInteger(1);
+
+    /** Every call carries its own id, so a server can tell the calls apart. */
+    private static int nextRequestId() {
+        return REQUEST_ID.getAndIncrement();
     }
 
     private static String readBounded(InputStream stream) throws IOException {

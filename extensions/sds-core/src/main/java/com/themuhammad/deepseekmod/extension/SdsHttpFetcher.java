@@ -117,7 +117,8 @@ public final class SdsHttpFetcher {
                 if (end < 0) break;
                 String tag = document.substring(index + 1, end).toLowerCase(java.util.Locale.US);
                 if (tag.startsWith("script") || tag.startsWith("style") || tag.startsWith("noscript")) {
-                    int close = document.toLowerCase(java.util.Locale.US).indexOf("</" + tag.split(" ")[0], end);
+                    String name = tag.split(" ")[0].split("/")[0];
+                    int close = indexOfIgnoreCase(document, "</" + name, end);
                     if (close > 0) {
                         index = document.indexOf('>', close);
                         index = index < 0 ? length : index + 1;
@@ -151,6 +152,23 @@ public final class SdsHttpFetcher {
         text = text.replaceAll("[ \\t]{2,}", " ");
         text = text.replaceAll("\\n{3,}", "\n\n");
         return text.trim();
+    }
+
+    /**
+     * Finds a text in a document without copying the document.
+     *
+     * The document is not lowered once, because that would change the length of
+     * the string for a few characters and break the indexes.
+     */
+    static int indexOfIgnoreCase(String document, String needle, int from) {
+        if (document == null || needle == null || needle.isEmpty()) return -1;
+        int limit = document.length() - needle.length();
+        for (int index = Math.max(0, from); index <= limit; index++) {
+            if (document.regionMatches(true, index, needle, 0, needle.length())) {
+                return index;
+            }
+        }
+        return -1;
     }
 
     private static String decodeEntity(String entity) {

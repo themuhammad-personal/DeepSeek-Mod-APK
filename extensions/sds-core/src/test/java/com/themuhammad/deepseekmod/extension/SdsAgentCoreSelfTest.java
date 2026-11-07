@@ -39,6 +39,8 @@ public final class SdsAgentCoreSelfTest {
         testMcpConfiguration();
         testNetworkToolsStayRefused();
         testToolResultHandoff();
+        testStopDoesNotPoisonTheNextTurn();
+        testDiagnosticsStayBounded();
         System.out.println("SDS agent-core self-test: PASS (" + checks + " checks)");
     }
 
@@ -390,6 +392,36 @@ public final class SdsAgentCoreSelfTest {
         if (!condition) throw new AssertionError(message);
     }
 
+    private static void testStopDoesNotPoisonTheNextTurn() {
+        SdsAgentSession session = new SdsAgentSession();
+        check(session.onProposal(new SdsToolCall("call-1", "workspace.list", "{}")),
+                "the proposal must be accepted");
+        check(session.approve("call-1"), "the proposal must be approved");
+        check(session.onRunStarted(), "the run must start");
+        check(session.requestStop(), "the stop must be accepted");
+        check(session.getCancellation().isCancelled(), "the cancellation must be set");
+        check(session.getState() == SdsAgentSession.State.CANCELLED, "the state must be cancelled");
+
+        // A new proposal is a new turn, so the old cancellation must not stop it.
+        check(session.onProposal(new SdsToolCall("call-2", "workspace.list", "{}")),
+                "the next proposal must be accepted");
+        check(!session.getCancellation().isCancelled(),
+                "the cancellation of the previous turn must not stop the next one");
+    }
+
+    private static void testDiagnosticsStayBounded() {
+        SdsObserverDiagnostics diagnostics = new SdsObserverDiagnostics();
+        for (int index = 0; index < 800; index++) {
+            diagnostics.onResponse("a growing answer " + index);
+        }
+        check(diagnostics.getCallbacks() == 800L, "every callback must be counted");
+        check(diagnostics.getMaxContentChars() > 0, "the maximum length must be recorded");
+        check(diagnostics.getEvents().size() <= SdsObserverDiagnostics.MAX_EVENTS,
+                "the event ring must stay bounded");
+        check(diagnostics.getThreads().size() <= SdsObserverDiagnostics.MAX_THREADS,
+                "the thread list must stay bounded");
+    }
+
     private static void testToolResultHandoff() {
         SdsToolResultHandoff.setEnabled(false);
         SdsToolResultHandoff.clearPendingResult();
@@ -470,6 +502,12 @@ public final class SdsAgentCoreSelfTest {
         check("value".equals(SdsJson.optString(round, "name")), "the round trip must keep the string");
         check(SdsJson.asLong(round.get("count")) == 3L, "the round trip must keep the number");
         check(SdsJson.optArray(round, "list").size() == 2, "the round trip must keep the list");
+
+        // A number without a JSON form must not break the document.
+        Map<String, Object> broken = new java.util.LinkedHashMap<>();
+        broken.put("value", Double.NaN);
+        Map<String, Object> repaired = SdsJson.parseObject(SdsJsonWriter.write(broken));
+        check(repaired.get("value") == null, "a number without a JSON form must become null");
     }
 
     private static void testMcpConfiguration() throws Exception {

@@ -28,7 +28,9 @@ public final class SdsToolExecutor {
         if (registry == null) throw new IllegalArgumentException("registry is required");
         this.registry = registry;
         this.policy = policy == null ? SdsExecutionPolicy.SAFE_DEFAULT : policy;
-        this.worker = Executors.newSingleThreadExecutor(new ThreadFactory() {
+        // A pool and not a single thread: a tool that ignores the interrupt must
+        // never block the next approved run.
+        this.worker = Executors.newCachedThreadPool(new ThreadFactory() {
             @Override
             public Thread newThread(Runnable runnable) {
                 Thread thread = new Thread(runnable, "sds-tool-worker");
@@ -81,7 +83,9 @@ public final class SdsToolExecutor {
             if (context != null && context.isCancelled()) {
                 return result(SdsToolResult.Status.CANCELLED, value.getOutput(), "cancelled by the user");
             }
-            return value;
+            // The output of the tool is bounded again with the policy of the
+            // executor, so a tool cannot exceed the limit with its own policy.
+            return new SdsToolResult(value.getStatus(), value.getOutput(), value.getSafeError(), policy);
         } catch (TimeoutException timeout) {
             future.cancel(true);
             return result(SdsToolResult.Status.TIMED_OUT, "",

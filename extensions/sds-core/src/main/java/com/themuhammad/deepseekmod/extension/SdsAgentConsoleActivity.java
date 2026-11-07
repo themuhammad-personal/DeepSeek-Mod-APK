@@ -659,6 +659,23 @@ public final class SdsAgentConsoleActivity extends Activity {
         }
     }
 
+    /**
+     * Joins the tool names of a server.
+     *
+     * String.join needs a newer platform than the app supports, so the names
+     * are joined here.
+     */
+    private static String joinToolNames(String server) {
+        List<String> names = SdsMcpTools.knownTools(server);
+        if (names.isEmpty()) return "none known yet";
+        StringBuilder builder = new StringBuilder();
+        for (String name : names) {
+            if (builder.length() > 0) builder.append(", ");
+            builder.append(name);
+        }
+        return builder.toString();
+    }
+
     private void rebuildExecutor() {
         if (executor != null) executor.shutdown();
         executor = new SdsToolExecutor(registry, SdsRuntimeRegistry.currentPolicy());
@@ -734,10 +751,7 @@ public final class SdsAgentConsoleActivity extends Activity {
             column.setOrientation(LinearLayout.VERTICAL);
             TextView name = text(server.getName() + " - " + server.getUrl(), 12, TEXT, false);
             column.addView(name, matchWrap());
-            TextView tools = text("tools: "
-                    + (SdsMcpTools.knownTools(server.getName()).isEmpty()
-                    ? "none known yet"
-                    : String.join(", ", SdsMcpTools.knownTools(server.getName()))),
+            TextView tools = text("tools: " + joinToolNames(server.getName()),
                     11, MUTED, false);
             LinearLayout.LayoutParams toolsParams = matchWrap();
             toolsParams.topMargin = dp(2);
@@ -1074,6 +1088,7 @@ public final class SdsAgentConsoleActivity extends Activity {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode != SdsExportService.REQUEST_SAVE) return;
         if (resultCode != android.app.Activity.RESULT_OK || data == null || data.getData() == null) {
+            SdsExportService.clearPending();
             Toast.makeText(this, "Nothing was saved", Toast.LENGTH_SHORT).show();
             return;
         }
@@ -1204,7 +1219,7 @@ public final class SdsAgentConsoleActivity extends Activity {
         Thread worker = new Thread(() -> {
             SdsToolContext context = new SdsToolContext(
                     new File(getFilesDir(), "workspace"),
-                    SdsExecutionPolicy.SAFE_DEFAULT,
+                    SdsRuntimeRegistry.currentPolicy(),
                     session.getCancellation());
             SdsToolResult result = executor.run(approved, context, true);
             if (result != null && result.getStatus() == SdsToolResult.Status.SUCCESS) {
@@ -1220,6 +1235,7 @@ public final class SdsAgentConsoleActivity extends Activity {
                 refresh();
             });
         }, "sds-console-tool");
+        worker.setDaemon(true);
         worker.start();
     }
 
@@ -1293,6 +1309,10 @@ public final class SdsAgentConsoleActivity extends Activity {
     private void refreshTools() {
         if (toolList == null) return;
         toolList.removeAllViews();
+        if (registry == null) {
+            toolList.addView(text("The allow-list is not ready.", 13, MUTED, false), matchWrap());
+            return;
+        }
         for (String line : registry.describe()) {
             TextView view = text(line, 12, Color.rgb(203, 215, 232), false);
             view.setTypeface(Typeface.MONOSPACE);
@@ -1300,7 +1320,8 @@ public final class SdsAgentConsoleActivity extends Activity {
             params.topMargin = dp(4);
             toolList.addView(view, params);
         }
-        TextView note = text("Only these tools can run. There is no shell and no network access.",
+        TextView note = text("Only these tools can run. The network tools need the network "
+                + "switch and the sandbox command needs the Linux Studio switch.",
                 11, WARN, false);
         LinearLayout.LayoutParams noteParams = matchWrap();
         noteParams.topMargin = dp(8);
@@ -1308,10 +1329,16 @@ public final class SdsAgentConsoleActivity extends Activity {
     }
 
     private void copyText(String value) {
-        ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
-        if (clipboard != null) {
+        try {
+            ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+            if (clipboard == null) {
+                Toast.makeText(this, "The clipboard is not available", Toast.LENGTH_SHORT).show();
+                return;
+            }
             clipboard.setPrimaryClip(ClipData.newPlainText("SDS tool proposal", value));
             Toast.makeText(this, "Proposal arguments copied", Toast.LENGTH_SHORT).show();
+        } catch (Throwable refused) {
+            Toast.makeText(this, "The clipboard refused the copy", Toast.LENGTH_SHORT).show();
         }
     }
 

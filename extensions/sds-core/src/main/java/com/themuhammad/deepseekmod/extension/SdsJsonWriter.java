@@ -35,7 +35,10 @@ public final class SdsJsonWriter {
             builder.append(((Boolean) value) ? "true" : "false");
         } else if (value instanceof Double || value instanceof Float) {
             double number = ((Number) value).doubleValue();
-            if (number == Math.rint(number) && !Double.isInfinite(number)) {
+            if (Double.isNaN(number) || Double.isInfinite(number)) {
+                // A number that has no JSON form becomes null.
+                builder.append("null");
+            } else if (number == Math.rint(number) && Math.abs(number) < 9.0e15) {
                 builder.append((long) number);
             } else {
                 builder.append(number);

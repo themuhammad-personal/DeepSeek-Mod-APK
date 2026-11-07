@@ -200,9 +200,12 @@ public final class SdsWorkspaceTools {
                 if (target.exists() && target.isDirectory()) {
                     return new SdsToolResult(SdsToolResult.Status.FAILED, "", "the path is a directory");
                 }
+                // The file is written next to the target and then moved into place,
+                // so an interrupted write never leaves a half written file behind.
+                File temporary = new File(target.getAbsolutePath() + ".sds-part");
                 OutputStream output = null;
                 try {
-                    output = new FileOutputStream(target);
+                    output = new FileOutputStream(temporary);
                     output.write(content.getBytes("UTF-8"));
                     output.flush();
                 } finally {
@@ -213,6 +216,12 @@ public final class SdsWorkspaceTools {
                             // The file is closed either way; the result reports the write.
                         }
                     }
+                }
+                if (!temporary.renameTo(target)) {
+                    //noinspection ResultOfMethodCallIgnored
+                    temporary.delete();
+                    return new SdsToolResult(SdsToolResult.Status.FAILED, "",
+                            "the file could not be moved into place");
                 }
                 return new SdsToolResult(SdsToolResult.Status.SUCCESS,
                         "wrote " + content.length() + " characters", "");

@@ -137,7 +137,6 @@ public final class SdsRuntimeRegistry {
      */
     public static synchronized void ensureDefaults() {
         if (defaultsRegistered) return;
-        defaultsRegistered = true;
 
         SdsSlashCommands.register("/help", "Lists the available slash commands.", new SdsSlashCommands.Expander() {
             @Override
@@ -193,6 +192,9 @@ public final class SdsRuntimeRegistry {
                 return builder.toString();
             }
         });
+
+        // The flag is set at the end, so a failure in the middle can be retried.
+        defaultsRegistered = true;
     }
 
     /** The memories that are added to a prompt, or an empty string. */
