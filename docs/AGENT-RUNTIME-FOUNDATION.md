@@ -26,6 +26,36 @@
 - `SdsToolExecutor`: the only place a tool runs. It refuses an unregistered tool, refuses a network tool while the network policy forbids it, refuses to run without an explicit approval, bounds the output, and interrupts a tool that exceeds the timeout.
 - `SdsWorkspaceTools`: `workspace.list`, `workspace.read` and `workspace.write`. They only touch the app-private workspace, they never run a command, they never use the network and every path goes through `SdsWorkspaceGuard`. A refused path or a mismatching argument becomes a failed result with a reason, not an exception.
 
+### Feature modules (build-verified, not device-runtime-verified)
+
+- `SdsSlashCommands` and the built-ins in `SdsRuntimeRegistry`: `/help`,
+  `/memory`, `/projects` and `/files`. The expansion happens in the request
+  hook, so the model receives a plain instruction. An unknown command leaves
+  the prompt untouched.
+- `SdsMemoryStore`: an app-private key/value store for the notes of the user.
+  Bounded to 200 entries and 4 KiB per value, and it survives a restart.
+- `SdsProjectRegistry`: named folders in the app-private workspace with a
+  bounded number of projects, and it survives a restart.
+- `SdsArtifactStore` and `SdsArtifactTools`: `artifact.create`,
+  `artifact.list` and `artifact.read`. The create tool writes, so it always
+  needs an approval, and the arguments use the same strict flat schema as the
+  other tools.
+- `SdsUiSpec` and `SdsUiTools`: the Generative UI. The assistant describes the
+  interface with flat strings and the console renders it with plain Android
+  views. No web view, no script and no remote content is involved.
+- `SdsExportService`: the export through the system file picker and the system
+  share sheet. The app asks for no storage permission and exposes no private
+  file.
+- `SdsSandboxConfig`, `SdsSandboxManager` and `SdsSandboxTool`: the Linux
+  Studio. The runtime is PRoot with a pinned Ubuntu base root filesystem. The
+  tool is only on the allow-list while the user turns it on, every command
+  still needs an explicit approval, the environment of the app is not
+  inherited and the output and the timeout are bounded. The runtime itself is
+  not bundled in this build, so the studio refuses to run and says so.
+- `SdsAppContext` and `SdsRuntimeRegistry`: the Android glue that fills the
+  runtime state with the app-private directories, and the holder that the
+  plain-Java feature logic uses so it can be regression tested.
+
 ### Observability (build-verified, not device-runtime-verified)
 
 - `SdsObserverDiagnostics`: measures the response observer **without storing any assistant content**. It counts the callbacks, the distinct contents, the duplicated contents, the growing and shrinking contents, the first and last content length, and the threads the callbacks arrived on. The content digest is salted with a random value that is created once per process, so a digest cannot be used to look up a known text.
@@ -33,7 +63,8 @@
 
 ### Console (build-verified, not device-runtime-verified)
 
-- `SdsAgentConsoleActivity`: a separate native launcher Activity that shows the session state, the approve, deny and stop actions, the activity timeline, the tool allow-list with the schema of every tool, the observer diagnostics and the proposal queue.
+- `SdsAgentConsoleActivity`: a separate native launcher Activity that shows the session state, the approve, deny and stop actions, the activity timeline, the tool allow-list with the schema of every tool, the observer diagnostics, the proposal queue, the memories, the projects, the slash commands, the artifacts, the Generative UI surface and the Linux Studio.
+- `SdsChatEntry`: the entry that the chat entry patch puts into the chat screen. It is a plain Android view on the window of the activity, it opens the console and it removes itself again when anything goes wrong.
 
 ## Streaming trace
 
@@ -56,6 +87,9 @@ See docs/DEEPSEEK-STREAM-TRACE.md for the obfuscated classes, methods and eviden
 | Workspace confinement | Every path goes through `SdsWorkspaceGuard`; a refusal becomes a failed result |
 | Untrusted model output | The proposal is parsed with a strict bounded parser and validated against the per-tool schema before anything runs |
 | No sensitive logs | The diagnostics store lengths, timings and a salted digest; the timeline stores a tool name and a status |
+| No silent shell | The only tool that runs a command is `sandbox.run`, it is only on the allow-list while the user turns it on, and every single command needs its own approval |
+| No token in a command | The environment of the app is not inherited by the sandbox, so only five fixed variables reach a command |
+| No web content | The Generative UI is rendered with plain Android views and the export uses the system dialogs |
 
 ## Rollback and disable behaviour
 
@@ -63,16 +97,20 @@ See docs/DEEPSEEK-STREAM-TRACE.md for the obfuscated classes, methods and eviden
 - Proposal mode is off by default and session-only, so the hooks never change a prompt until the user turns it on.
 - The allow-list starts empty in the shipped runtime and is only populated with the workspace tools, so removing the registry population removes every executable tool without touching the UI.
 - The registry refuses a duplicate name, so a tool cannot be replaced at runtime.
+- The chat entry is a separate patch, so the console can be reached from the
+  launcher alone.
+- The Linux Studio is switched off by a switch in the console, and the switch
+  removes the tool from the allow-list instead of only hiding it.
 
 ## Tests
 
-`bash scripts/test-agent-core.sh` runs on every push in CI and covers: the safe defaults, the opt-in prompt, the queue and its deduplication, the malformed payload handling, the strict JSON grammar, the per-response call limit, the workspace confinement, the observer diagnostics, every session transition, the strict tool arguments, the allow-list, the approval gate, the unregistered tool refusal, the network refusal, the timeout and the cancellation, and the workspace tools staying inside the workspace.
+`bash scripts/test-agent-core.sh` runs on every push in CI and covers: the safe defaults, the opt-in prompt, the queue and its deduplication, the malformed payload handling, the strict JSON grammar, the per-response call limit, the workspace confinement, the observer diagnostics, every session transition, the strict tool arguments, the allow-list, the approval gate, the unregistered tool refusal, the network refusal, the timeout and the cancellation, the workspace tools staying inside the workspace, the memory store, the project registry, the slash commands, the prompt expansion, the artifact store and its tools, the Generative UI specification and the state of the Linux Studio.
 
 The CI run of the runtime is recorded in the build workflow; the results are build-verified, not device-runtime-verified.
 
 ## Explicitly not implemented
 
-The stream path is statically traced but not yet runtime-verified on a physical device. Callback frequency, coroutine/thread context, lifecycle ordering and interaction with Compose rendering are still unknown. The Console is a separate launcher Activity, not yet an entry embedded in the main chat UI. The current branch does not invoke MCP tools, send tool results back to DeepSeek, or expose a stop control for the official chat itself. The proposal queue is in-memory and Agent mode is session-only.
+The stream path is statically traced but not yet runtime-verified on a physical device. Callback frequency, coroutine/thread context, lifecycle ordering and interaction with Compose rendering are still unknown. The console entry in the chat screen is proved statically only, its placement and its touch behaviour on a device are unproven. The current branch does not invoke MCP tools, does not run a Deep Research, does not send tool results back to DeepSeek, does not expose a stop control for the official chat itself, and does not bundle the PRoot runtime of the Linux Studio. The proposal queue is in-memory and Agent mode is session-only.
 
 Therefore, this is a native agent runtime with an approval-gated executor for the private workspace, not a complete multi-turn agent.
 
@@ -80,10 +118,10 @@ Therefore, this is a native agent runtime with an approval-gated executor for th
 
 1. ~~Obtain a stable copy of the exact inspected APK and complete Morphe patch-apply verification.~~ Done, see docs/P0-VERIFICATION.md.
 2. Run the patched APK on a real device and prove the SET/APPEND hook fires with complete assistant content, without excessive duplicates or UI-thread stalls. The observer diagnostics are the instrument for this.
-3. Trace the Compose navigation/message renderer and embed a Console entry into supported in-app navigation.
+3. ~~Trace the Compose navigation/message renderer and embed a Console entry into supported in-app navigation.~~ The entry is a plain view on the window of `MainActivity`, proven statically; the device check of the placement is still open.
 4. Feed tool results back only through a verified supported user-message flow; never spoof or rewrite login/session traffic.
 5. Implement MCP with a native transport, an explicit consent step and a credential store.
-6. Implement the remaining feature modules of docs/FEATURE-PORT-MAP.md, each with its own UI, lifecycle, permissions, persistence, tests and failure modes.
+6. Implement the remaining feature modules of docs/FEATURE-PORT-MAP.md, each with its own UI, lifecycle, permissions, persistence, tests and failure modes. The slash commands, the memories, the projects, the artifacts, the export, the Generative UI and the Linux Studio are done; MCP and Deep Research are not.
 7. Test stop, timeout, process death, rotation, denied permissions and malformed streams on a real device.
 
 ## Security caveat

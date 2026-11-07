@@ -33,13 +33,15 @@ correct callback frequency, threading, Compose rendering or real-device executio
 
 - the target is rebuilt from a hash-pinned source and every payload file is re-verified against
   the pinned hashes;
-- the compatibility gate, the experimental hook patch and the native Agent Console patch apply
-  to that target, and Morphe reports success;
+- the compatibility gate, the experimental hook patch, the native Agent Console patch and the
+  native Agent chat entry patch apply to that target, and Morphe reports success;
 - the patched APK keeps the official package name, version, version code and ABI, is signed,
   is aligned, and every DEX file disassembles;
 - the original launcher Activity is still declared and the Agent Console Activity is added;
 - each hook call site reads the register that the original code just wrote, proven against the
   patched DEX rather than assumed;
+- the chat entry call site sits directly in front of the return of `MainActivity.onCreate`, so
+  the original code of the activity runs completely before the entry is added;
 - the patch introduces no reference to a type that is not defined in any DEX file. The official
   APK already references optional third-party SDK types that it does not bundle, so the check is
   a comparison with the unpatched target and not an absolute one.
@@ -58,5 +60,8 @@ correct callback frequency, threading, Compose rendering or real-device executio
   assistant content, with the expected callback frequency and without duplicated events.
 - Confirm proposals are not executed, Dismiss removes them, and the Console is usable across
   rotation.
-- Trace and verify the Compose navigation/message renderer before moving the Console into the
-  main chat UI.
+- Open the chat screen and check that the floating entry appears in a sensible place, that it
+  opens the console, that it never covers the composer or a message, and that the official chat
+  behaves exactly as before with the patch enabled and with it disabled.
+- Confirm that the memories, the projects, the artifacts, the slash commands and the Generative
+  UI survive an app restart and that the files stay inside the app-private directory.
