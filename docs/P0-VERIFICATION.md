@@ -191,8 +191,40 @@ pre-existing set of the target.
 ## 5. Reproducing the run
 
 ```bash
-gh run view 42336409045 --repo themuhammad-personal/DeepSeek-Mod-APK
+gh run view 42349185806 --repo themuhammad-personal/DeepSeek-Mod-APK
 ```
+
+The newest full verification run is `42349185806`. It proves the four patches
+that exist today:
+
+```
+applied=DeepSeek 2.7.4 compatibility check, Native Agent hook points (experimental),
+Super DeepSeek native Agent Console, Super DeepSeek native Agent chat entry
+success=True reason=None
+```
+
+with the hook call sites
+
+```
+OK      beforePrompt receives the prompt register v8
+OK      observeResponse receives the SET content register v3
+OK      observeResponse receives the accumulated content register v4
+OK      observeResponseAppend reads the content register v4
+OK      the handback is written back into v4 before the update
+OK      the patch introduced no new undefined type reference
+```
+
+and the artefacts of that run:
+
+| Item | Value |
+|---|---|
+| rebuilt target SHA-256 | `b4bd2251637879b3c192ad37ff2905910c7c97da192c4bc56fd782d93b01b930` |
+| patched APK SHA-256 | `69b01e2fb2d16184584218c924823de993a415852bb6ece2fc6a8c3098ca8278` |
+| patched APK size | 31,253,709 bytes |
+| source bundle SHA-256 | `b0ec418ec9b8a273479acd8fed73acefbdbddd34162684c50e1737abb70d74de` |
+
+The earlier P0 run `42336409045` proved the first three patches before the
+chat entry and the handback existed.
 
 The run needs the hash-pinned source location, which is read from `.github/pinned-source.env`.
 That file points at the owner's own Drive copy and is **not part of the project**: it is removed
@@ -210,6 +242,12 @@ reports a pass it did not perform.
    thread, lifecycle, UI stalls) without logging anything sensitive.
 2. **The 2.7.4/294 build is not supported.** A separate fingerprint set is required for the
    PairIP build; the 2.7.4 fingerprints must never be applied to it.
-3. **The console entry point** is a separate launcher activity, not a button inside the official
-   chat screen. Adding a native entry inside the Compose chat UI is the next UI task and needs
-   the device to validate.
+3. **The console entry point** is now also a plain floating view inside the official chat
+   screen, inserted by the patch `Super DeepSeek native Agent chat entry`. The call site is
+   proved in the patched DEX, but the placement and the touch behaviour on a device are not.
+4. **The handback of a tool result** is proved statically in the patched DEX and it is switched
+   off by default. The device run has to show that the chat renders the rewritten content and
+   that the result is never duplicated.
+5. **The PRoot runtime of the Linux Studio** is not bundled, so the studio refuses to run. The
+   runtime and the root filesystem have to be added by the owner, with the download behind an
+   explicit approval.
