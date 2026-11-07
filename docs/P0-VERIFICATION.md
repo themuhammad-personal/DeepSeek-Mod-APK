@@ -249,5 +249,9 @@ reports a pass it did not perform.
    off by default. The device run has to show that the chat renders the rewritten content and
    that the result is never duplicated.
 5. **The PRoot runtime of the Linux Studio** is not bundled, so the studio refuses to run. The
-   runtime and the root filesystem have to be added by the owner, with the download behind an
-   explicit approval.
+   console can now download and install the pinned root filesystem behind an explicit approval
+   and with a checksum against the official list, but the binaries of PRoot still have to be
+   added by the owner.
+6. **The console is not exported.** The Agent Console Activity is declared with
+   `android:exported="false"` and without a launcher filter, so only the app itself can open it.
+   The verification fails when that changes.
