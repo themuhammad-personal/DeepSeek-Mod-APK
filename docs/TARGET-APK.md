@@ -16,6 +16,25 @@
 
 The APK and decoded third-party sources are not committed. Keep local inputs in an ignored folder and verify their hashes before every analysis/build.
 
+## Second inspected sample
+
+| Field | Value |
+|---|---|
+| Application ID | com.deepseek.chat |
+| Version name | 2.7.4 |
+| Version code | 294 |
+| Minimum SDK | 29 |
+| Target SDK | 36 |
+| DEX files | classes.dex, classes2.dex, classes3.dex, classes4.dex |
+| Distribution | mirrored split package, signed with the Play App Signing key |
+| Source | the owner's own copy of `com.deepseek.chat_2.7.4_apkmirror.com.apkm` |
+
+This is the same app version, but a different build: it is obfuscated on its
+own, so every class name of the build with the version code 293 changed. It
+therefore has its own fingerprint set, which is described in
+[FINGERPRINTS.md](FINGERPRINTS.md). The patches were not applied to it and it
+was not run on a device, so its target is declared as experimental.
+
 ## Statically identified method seams
 
 ### Request prompt serializer
@@ -42,6 +61,9 @@ They do not prove that the network stream, incremental SSE handling, Compose mes
 
 ## Version policy
 
-- Only 2.7.4 is declared as a supported target.
+- Only 2.7.4 is declared as a supported target, with the two inspected builds
+  293 (stable) and 294 (experimental).
 - Do not use catch-all compatibility for future versions.
 - Re-inspect method descriptors and instruction context for each new DeepSeek release before adding an AppTarget.
+- Every build needs its own fingerprint set, and the set is selected by the
+  version code of the APK that is patched. See [FINGERPRINTS.md](FINGERPRINTS.md).

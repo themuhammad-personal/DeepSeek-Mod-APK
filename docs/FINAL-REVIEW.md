@@ -116,5 +116,10 @@ file in the Drive of the owner was revoked again.
    moving latest version, so the verification waits for the pointer of the
    owner. The hash is never changed to make a run pass.
 4. **The 2.7.4/294 build.** The copy in the Drive of the owner is a different
-   build with a different version code. It needs its own fingerprint set; the
-   fingerprints of 2.7.4 must never be applied to it.
+   build with a different version code, and it is obfuscated on its own. It now
+   has its own fingerprint set, which was read out of its dex files and proved
+   with `scripts/verify_fingerprints.py`: the set of the build 294 resolves
+   completely in that build and does not resolve at all in the build 293, and
+   the other way round. The target of the version code 294 is therefore
+   declared as experimental: the patches were not applied to it and it was not
+   run on a device. See [FINGERPRINTS.md](FINGERPRINTS.md).
