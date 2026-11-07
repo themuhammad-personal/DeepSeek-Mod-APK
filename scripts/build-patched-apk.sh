@@ -19,7 +19,8 @@
 #                          the Morphe package registry.
 #   --source-file <file>  the pinned extraction bundle that is already on this
 #                          machine. Use it when the file lives in a Drive that
-#                          is not shared with the internet.
+#                          is not shared with the internet. An .apkm is also
+#                          accepted: the base APK is taken out of it.
 #   --source-url <url>    the address of the pinned extraction bundle.
 #   --source-sha256 <sh>  the checksum of that bundle.
 #   --out <directory>     where the result is written. Default: build-local.
@@ -109,10 +110,26 @@ echo "$SOURCE_SHA256  $WORK/pinned-extraction.zip" | sha256sum --check \
 
 # 4. The target APK.
 say "the target APK"
-python3 "$ROOT/scripts/rebuild-pinned-apk.py" \
-  "$WORK/pinned-extraction.zip" "$WORK/deepseek-pinned-unaligned.apk"
-"$BUILD_TOOLS/zipalign" -f -p 4 \
-  "$WORK/deepseek-pinned-unaligned.apk" "$WORK/deepseek-pinned.apk"
+if [[ "$WORK/pinned-extraction.zip" == *.apkm ]]; then
+  # The build with the version code 294 is distributed as a split package. The
+  # base APK of that package is the app itself and it is patched directly.
+  unzip -o -q "$WORK/pinned-extraction.zip" base.apk -d "$WORK"
+  [[ -s "$WORK/base.apk" ]] || die "the APKM does not contain base.apk"
+  cp -f "$WORK/base.apk" "$WORK/deepseek-pinned.apk"
+  echo "the base APK of the APKM is the target"
+else
+  python3 "$ROOT/scripts/rebuild-pinned-apk.py" \
+    "$WORK/pinned-extraction.zip" "$WORK/deepseek-pinned-unaligned.apk"
+  "$BUILD_TOOLS/zipalign" -f -p 4 \
+    "$WORK/deepseek-pinned-unaligned.apk" "$WORK/deepseek-pinned.apk"
+fi
+
+# 4a. The fingerprints of this build have to resolve before anything is
+#     patched. The script reads the version code of the APK, so it checks the
+#     set of this build and proves that the set of the other build is absent.
+say "the fingerprints of the target"
+python3 -m pip install --quiet --disable-pip-version-check androguard
+python3 "$ROOT/scripts/verify_fingerprints.py" "$WORK/deepseek-pinned.apk"
 
 # 5. The patches.
 say "the patches"
@@ -172,7 +189,6 @@ fi
 
 # 8. The proof of the hook call sites.
 say "the proof of the hook call sites"
-python3 -m pip install --quiet --disable-pip-version-check androguard
 python3 "$ROOT/scripts/verify_patched_hooks.py" \
   "$WORK/deepseek-patched.apk" "$WORK/deepseek-pinned.apk"
 

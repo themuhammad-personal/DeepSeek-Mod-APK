@@ -61,11 +61,17 @@ a binary. To get a file you can install, run the local builder:
 
     bash scripts/build-patched-apk.sh --mpp <bundle.mpp>
     bash scripts/build-patched-apk.sh --source-file <extraction.zip>   # a file you already have
+    bash scripts/build-patched-apk.sh --source-file <app.apkm>        # the build with the version code 294
 
 It needs a JDK 21, python3, curl, unzip and the Android SDK with the build
 tools 36.0.0. Without `--mpp` it builds the bundle with gradle, which needs
 access to the Morphe package registry; the bundle of the last CI run can also
 be downloaded from the run page of the build workflow.
+
+Before it patches anything, the builder checks the fingerprint set of the
+target: the set of the build that is in front of it has to resolve completely
+and the set of the other build must be absent, so a build that was not
+inspected is refused instead of being patched at the wrong place.
 
 The result is `build-local/deepseek-patched.apk`, together with its SHA-256
 and the proof of the hook call sites. The signing key is generated on your
@@ -75,7 +81,13 @@ machine and stays there.
 
 The exact source APK must match the inspected 2.7.4 SHA-256. The current official download URL is a moving latest-version endpoint and has returned a different binary, so the verification workflow safely stops before applying old fingerprints. Supply a stable HTTPS URL and SHA-256 for the exact inspected APK; never change the hash to match an uninspected release.
 
-The verification workflow deletes the temporary APKs after checking them and does not publish them.
+Two builds are inspected, and each one has its own fingerprint set, because
+every release of the app is obfuscated on its own. The fingerprint set is
+selected by the version code of the APK that is patched, so the fingerprints of
+one build are never applied to another build. See
+[docs/FINGERPRINTS.md](docs/FINGERPRINTS.md).
+
+The verification workflows delete the temporary APKs after checking them and do not publish them.
 
 ## Security and identity
 
