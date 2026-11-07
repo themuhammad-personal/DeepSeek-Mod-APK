@@ -17,7 +17,6 @@ concurrency:
 jobs:
   build:
     name: Patch, re-sign and package all 2.7.5 split APKs
-    if: ${{ vars.SDS_296_SOURCE_URL != '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 75
     steps:
@@ -47,15 +46,17 @@ jobs:
           test -x "$ANDROID_HOME/build-tools/36.0.0/dexdump"
       - name: Download and verify the exact uploaded APKS archive
         env:
-          SOURCE_URL: ${{ vars.SDS_296_SOURCE_URL }}
+          SOURCE_URL: https://drive.google.com/uc?export=download&id=1g_nQYH3UhKNjSHhQlwPEcejLe0ZBkz5-
           SOURCE_SHA256: 02e6dafdb37fb2be754d4dfd428d2cb9767a610f4de1fa30bce21f11dc14cd8c
         run: |
           set -euo pipefail
           [[ "$SOURCE_URL" == https://* ]] || { echo "::error::Source URL must use HTTPS."; exit 2; }
           [[ "$SOURCE_SHA256" =~ ^[a-fA-F0-9]{64}$ ]] || { echo "::error::Source SHA-256 must be 64 hexadecimal characters."; exit 2; }
           mkdir -p "$RUNNER_TEMP/deepseek-296"
-          curl --proto '=https' --tlsv1.2 --fail --location --retry 3 --max-time 900 \
-            "$SOURCE_URL" --output "$RUNNER_TEMP/deepseek-296/source.apks"
+          # gdown follows Drive's virus-scan confirmation flow for large files.
+          python3 -m pip install --quiet --disable-pip-version-check "gdown==5.2.0"
+          gdown --fuzzy "$SOURCE_URL" --output "$RUNNER_TEMP/deepseek-296/source.apks"
+          test -s "$RUNNER_TEMP/deepseek-296/source.apks"
           echo "$SOURCE_SHA256  $RUNNER_TEMP/deepseek-296/source.apks" | sha256sum --check
       - name: Verify the original 2.7.5 versionCode 296 split set
         run: |
