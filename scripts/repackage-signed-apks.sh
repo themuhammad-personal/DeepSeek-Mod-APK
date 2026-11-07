@@ -60,10 +60,21 @@ for apk in "$WORK/original"/*.apk; do
 done
 sign_one() {
   local input="$1" name="$2"
+  local unsigned="$WORK/signed/$name.unsigned.apk"
   local aligned="$WORK/signed/$name.aligned.apk"
   local output="$WORK/signed/$name"
-  "$ZIPALIGN" -f -p 4 "$input" "$aligned"
-  "$APKSIGNER" sign --ks "$SDS_KEYSTORE" --ks-key-alias "$SDS_KEY_ALIAS" \
+
+  # Remove a prior JAR/v1 signature block (Morphe may have signed the patched
+  # base already). Leaving stale META-INF signature records makes apksigner's
+  # verifier report a missing MANIFEST.MF after the new signature is written.
+  cp "$input" "$unsigned"
+  zip -q -d "$unsigned" 'META-INF/MANIFEST.MF' 'META-INF/*.SF' \
+    'META-INF/*.RSA' 'META-INF/*.DSA' 'META-INF/*.EC' >/dev/null 2>&1 || true
+
+  "$ZIPALIGN" -f -p 4 "$unsigned" "$aligned"
+  "$APKSIGNER" sign --v1-signing-enabled false --v2-signing-enabled true \
+    --v3-signing-enabled true --v4-signing-enabled false \
+    --ks "$SDS_KEYSTORE" --ks-key-alias "$SDS_KEY_ALIAS" \
     --ks-pass env:SDS_KEYSTORE_PASSWORD --key-pass env:SDS_KEY_PASSWORD \
     --out "$output" "$aligned"
   "$APKSIGNER" verify --verbose "$output" >/dev/null
