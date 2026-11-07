@@ -18,7 +18,7 @@ AAPT="$BT/aapt"; ZIPALIGN="$BT/zipalign"; APKSIGNER="$BT/apksigner"
 for tool in "$AAPT" "$ZIPALIGN" "$APKSIGNER"; do
   [[ -x "$tool" ]] || { echo "missing Android tool: $tool" >&2; exit 1; }
 done
-rm -rf "$WORK"; mkdir -p "$WORK/original" "$WORK/signed"
+rm -rf "$WORK"; mkdir -p "$WORK/original" "$WORK/signed" "$WORK/intermediate"
 python3 - "$SOURCE_APKS" "$WORK/original" <<'PY'
 import pathlib, sys, zipfile
 source, output = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
@@ -71,8 +71,8 @@ echo "Release signer SHA-256: $CERT"
 
 sign_one() {
   local input="$1" name="$2"
-  local unsigned="$WORK/signed/$name.unsigned.apk"
-  local aligned="$WORK/signed/$name.aligned.apk"
+  local unsigned="$WORK/intermediate/$name.unsigned.apk"
+  local aligned="$WORK/intermediate/$name.aligned.apk"
   local output="$WORK/signed/$name"
 
   # Remove the prior signing records before re-signing the patched base APK.
