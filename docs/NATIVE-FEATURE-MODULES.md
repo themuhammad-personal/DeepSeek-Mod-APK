@@ -104,6 +104,15 @@ workspace is refused and reported as a failed result, the read is limited to
 16 KiB and the write to 64 KiB, there is no shell and no network, and the
 write tool is not read-only so it always needs an approval.
 
+**The documents of the user.** The console has a file picker that opens the
+picker of the system. The document the user picks is read with a bound of
+256 KiB and can be copied into the private workspace, where the file tools
+reach it. The picker asks for no permission, the app cannot see a document
+that was not picked and the copy into the workspace is written through the
+same guard. Writing a document back to the place it came from is not
+implemented, because that would change a file outside the app without a
+second, explicit approval.
+
 **Rollback.** The tools are only reachable through the allow-list; removing
 them from the registry disables them without touching the app.
 
