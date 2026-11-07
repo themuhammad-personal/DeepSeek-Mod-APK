@@ -39,6 +39,11 @@ public final class SdsAgentConsoleActivity extends Activity {
 
     private final SdsAgentSession session = new SdsAgentSession();
     private final android.os.Handler handler = new android.os.Handler(android.os.Looper.getMainLooper());
+    /** The request code of the document picker of the system. */
+    private static final int REQUEST_PICK_DOCUMENT = 4201;
+    /** The largest document that is read from the picker. */
+    private static final int MAX_DOCUMENT_BYTES = 256 * 1024;
+
     private SdsToolRegistry registry;
     private SdsToolExecutor executor;
     private boolean polling;
@@ -54,6 +59,11 @@ public final class SdsAgentConsoleActivity extends Activity {
     private TextView studioStatus;
     private TextView studioOutput;
     private Switch sandboxSwitch;
+    private TextView pickedDocumentView;
+    private TextView workspaceFilesView;
+    private android.net.Uri pickedDocumentUri;
+    private String pickedDocumentName;
+    private String pickedDocumentText;
     private EditText studioInput;
     private TextView researchOutput;
     private EditText researchInput;
@@ -178,7 +188,9 @@ public final class SdsAgentConsoleActivity extends Activity {
         LinearLayout.LayoutParams switchParams = matchWrap();
         switchParams.topMargin = dp(8);
         modeCard.addView(proposalMode, switchParams);
-        TextView modeNote = text("Session-only. It resets when the app process restarts.", 12, MUTED, false);
+        TextView modeNote = text("The switches are kept in the private preferences of the app, "
+                + "so they survive a restart. The proposal queue lives in the memory of the process.",
+                12, MUTED, false);
         LinearLayout.LayoutParams noteParams = matchWrap();
         noteParams.topMargin = dp(6);
         modeCard.addView(modeNote, noteParams);
@@ -284,6 +296,38 @@ public final class SdsAgentConsoleActivity extends Activity {
         memoryCard.addView(memoryList, memoryListParams);
         addGap(root, 12);
         root.addView(memoryCard, matchWrap());
+
+        LinearLayout filesCard = card();
+        filesCard.addView(text("Files", 16, TEXT, true), matchWrap());
+        TextView filesNote = text(
+                "The private workspace of the app and the documents you pick yourself. Picking a "
+                        + "document opens the file picker of the system, the app asks for no "
+                        + "permission and it cannot see a document you did not pick.",
+                11, MUTED, false);
+        LinearLayout.LayoutParams filesNoteParams = matchWrap();
+        filesNoteParams.topMargin = dp(4);
+        filesCard.addView(filesNote, filesNoteParams);
+        Button pickDocument = button("Pick a document");
+        pickDocument.setOnClickListener(v -> onPickDocument());
+        LinearLayout.LayoutParams pickDocumentParams = wrapWrap();
+        pickDocumentParams.topMargin = dp(6);
+        filesCard.addView(pickDocument, pickDocumentParams);
+        pickedDocumentView = text("No document picked yet.", 12, Color.rgb(203, 215, 232), false);
+        LinearLayout.LayoutParams pickedDocumentParams = matchWrap();
+        pickedDocumentParams.topMargin = dp(6);
+        filesCard.addView(pickedDocumentView, pickedDocumentParams);
+        workspaceFilesView = text("", 12, Color.rgb(203, 215, 232), false);
+        workspaceFilesView.setTypeface(Typeface.MONOSPACE);
+        LinearLayout.LayoutParams workspaceFilesParams = matchWrap();
+        workspaceFilesParams.topMargin = dp(6);
+        filesCard.addView(workspaceFilesView, workspaceFilesParams);
+        Button importDocument = button("Import the document into the workspace");
+        importDocument.setOnClickListener(v -> onImportDocument());
+        LinearLayout.LayoutParams importDocumentParams = wrapWrap();
+        importDocumentParams.topMargin = dp(6);
+        filesCard.addView(importDocument, importDocumentParams);
+        addGap(root, 12);
+        root.addView(filesCard, matchWrap());
 
         LinearLayout projectCard = card();
         projectCard.addView(text("Projects", 16, TEXT, true), matchWrap());
@@ -610,6 +654,7 @@ public final class SdsAgentConsoleActivity extends Activity {
         refreshGenerativeUi();
         refreshSandbox();
         refreshMcpServers();
+        refreshWorkspaceFiles();
     }
 
     private void onAddMemory() {
@@ -631,6 +676,111 @@ public final class SdsAgentConsoleActivity extends Activity {
         } catch (IllegalArgumentException | IllegalStateException refused) {
             Toast.makeText(this, String.valueOf(refused.getMessage()), Toast.LENGTH_SHORT).show();
         }
+    }
+
+    /** Opens the file picker of the system. */
+    private void onPickDocument() {
+        try {
+            android.content.Intent intent = new android.content.Intent(
+                    android.content.Intent.ACTION_OPEN_DOCUMENT);
+            intent.addCategory(android.content.Intent.CATEGORY_OPENABLE);
+            intent.setType("*/*");
+            intent.addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            startActivityForResult(intent, REQUEST_PICK_DOCUMENT);
+        } catch (Throwable refused) {
+            Toast.makeText(this, "The file picker could not be opened", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    /** Copies the picked document into the private workspace. */
+    private void onImportDocument() {
+        if (pickedDocumentText == null || pickedDocumentName == null) {
+            Toast.makeText(this, "No document was picked", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        File workspace = SdsRuntimeRegistry.getWorkspace();
+        if (workspace == null) {
+            Toast.makeText(this, "The workspace is not ready", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        try {
+            File target = SdsWorkspaceGuard.resolveWithin(workspace,
+                    "imported/" + safeFileName(pickedDocumentName));
+            SdsAtomicFile.write(target, pickedDocumentText,
+                    java.nio.charset.Charset.forName("UTF-8"));
+            Toast.makeText(this, "The document was imported into the workspace",
+                    Toast.LENGTH_SHORT).show();
+        } catch (Exception refused) {
+            Toast.makeText(this, "The document could not be imported", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    /** A file name that only holds safe characters. */
+    private static String safeFileName(String name) {
+        StringBuilder builder = new StringBuilder();
+        for (int index = 0; index < name.length() && builder.length() < 60; index++) {
+            char c = name.charAt(index);
+            boolean allowed = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
+                    || (c >= '0' && c <= '9') || c == '.' || c == '-' || c == '_';
+            builder.append(allowed ? c : '-');
+        }
+        String result = builder.toString();
+        while (result.startsWith(".")) result = result.substring(1);
+        return result.isEmpty() ? "document.txt" : result;
+    }
+
+    /** Reads the picked document, bounded, on a worker thread. */
+    private void readPickedDocument(final android.net.Uri uri, final String name) {
+        if (pickedDocumentView != null) pickedDocumentView.setText("the document is being read...");
+        final Thread worker = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                String content = "";
+                java.io.InputStream input = null;
+                try {
+                    input = getContentResolver().openInputStream(uri);
+                    if (input != null) {
+                        java.io.ByteArrayOutputStream buffer =
+                                new java.io.ByteArrayOutputStream();
+                        byte[] chunk = new byte[16 * 1024];
+                        int read;
+                        int total = 0;
+                        while ((read = input.read(chunk)) > 0) {
+                            total += read;
+                            if (total > MAX_DOCUMENT_BYTES) break;
+                            buffer.write(chunk, 0, read);
+                        }
+                        content = new String(buffer.toByteArray(), "UTF-8");
+                    }
+                } catch (Throwable refused) {
+                    content = "";
+                } finally {
+                    if (input != null) {
+                        try {
+                            input.close();
+                        } catch (java.io.IOException ignored) {
+                            // The document is read either way.
+                        }
+                    }
+                }
+                final String text = content;
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        pickedDocumentUri = uri;
+                        pickedDocumentName = name;
+                        pickedDocumentText = text;
+                        if (pickedDocumentView != null) {
+                            pickedDocumentView.setText(text.isEmpty()
+                                    ? "The document is empty or could not be read."
+                                    : name + " (" + text.length() + " characters)");
+                        }
+                    }
+                });
+            }
+        }, "sds-document");
+        worker.setDaemon(true);
+        worker.start();
     }
 
     private void onCreateProject() {
@@ -1205,6 +1355,20 @@ public final class SdsAgentConsoleActivity extends Activity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, android.content.Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == REQUEST_PICK_DOCUMENT) {
+            if (resultCode != android.app.Activity.RESULT_OK || data == null
+                    || data.getData() == null) {
+                if (pickedDocumentView != null) {
+                    pickedDocumentView.setText("No document picked yet.");
+                }
+                return;
+            }
+            android.net.Uri uri = data.getData();
+            String name = uri.getLastPathSegment();
+            if (name == null || name.isEmpty()) name = "document.txt";
+            readPickedDocument(uri, name);
+            return;
+        }
         if (requestCode != SdsExportService.REQUEST_SAVE) return;
         if (resultCode != android.app.Activity.RESULT_OK || data == null || data.getData() == null) {
             SdsExportService.clearPending();
@@ -1232,6 +1396,42 @@ public final class SdsAgentConsoleActivity extends Activity {
                 SdsExportService.MIME_TEXT)) {
             Toast.makeText(this, "The system file picker could not be opened", Toast.LENGTH_SHORT).show();
         }
+    }
+
+    /** Shows the files of the private workspace. */
+    private void refreshWorkspaceFiles() {
+        if (workspaceFilesView == null) return;
+        File workspace = SdsRuntimeRegistry.getWorkspace();
+        if (workspace == null || !workspace.isDirectory()) {
+            workspaceFilesView.setText("The workspace is empty.");
+            return;
+        }
+        File[] children = workspace.listFiles();
+        if (children == null || children.length == 0) {
+            workspaceFilesView.setText("The workspace is empty.");
+            return;
+        }
+        java.util.Arrays.sort(children, new java.util.Comparator<File>() {
+            @Override
+            public int compare(File left, File right) {
+                return left.getName().compareTo(right.getName());
+            }
+        });
+        StringBuilder builder = new StringBuilder();
+        for (int index = 0; index < children.length && index < 40; index++) {
+            File child = children[index];
+            if (builder.length() > 0) builder.append('\n');
+            builder.append(child.getName());
+            if (child.isDirectory()) {
+                builder.append('/');
+            } else {
+                builder.append("  ").append(child.length()).append(" B");
+            }
+        }
+        if (children.length > 40) {
+            builder.append("\n... and ").append(children.length - 40).append(" more");
+        }
+        workspaceFilesView.setText(builder.toString());
     }
 
     private void refreshCommands() {
