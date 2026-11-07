@@ -81,11 +81,21 @@ machine and stays there.
 
 The exact source APK must match the inspected 2.7.4 SHA-256. The current official download URL is a moving latest-version endpoint and has returned a different binary, so the verification workflow safely stops before applying old fingerprints. Supply a stable HTTPS URL and SHA-256 for the exact inspected APK; never change the hash to match an uninspected release.
 
-Two builds are inspected, and each one has its own fingerprint set, because
+Three builds are inspected, and each one has its own fingerprint set, because
 every release of the app is obfuscated on its own. The fingerprint set is
 selected by the version code of the APK that is patched, so the fingerprints of
-one build are never applied to another build. See
-[docs/FINGERPRINTS.md](docs/FINGERPRINTS.md).
+one build are never applied to another build. A build that was not inspected is
+refused with a readable message instead of being patched at the wrong place.
+See [docs/FINGERPRINTS.md](docs/FINGERPRINTS.md).
+
+| Build | App version | Version code | Minimum SDK | State |
+|---|---|---|---|---|
+| 1 | 2.7.4 | 293 | 24 | patch-applied, stable target |
+| 2 | 2.7.4 | 294 | 29 | patch-applied, experimental |
+| 3 | 2.7.5 | 296 | 32 | patch-applied, experimental |
+
+A workflow reports what the official download address serves right now, so it
+is visible when DeepSeek publishes a build that needs a new fingerprint set.
 
 The verification workflows delete the temporary APKs after checking them and do not publish them.
 

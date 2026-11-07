@@ -254,6 +254,28 @@ gh run view 42358670995 --repo themuhammad-personal/DeepSeek-Mod-APK
 Every step of that run succeeded as well, the four patches were applied and the
 hook call sites were proved in the patched DEX with the names of that build.
 
+### The third inspected build
+
+DeepSeek 2.7.5, the version code 296, is the newest release that was
+inspected. It is a split package, it needs Android 12L and it is obfuscated on
+its own, so it has its own fingerprint set. The same chain was repeated
+against it:
+
+```bash
+gh run view 42360116129 --repo themuhammad-personal/DeepSeek-Mod-APK
+```
+
+| Item | Value |
+|---|---|
+| source package SHA-256 | `2362b0d6d98fd7288cc25fb889f4f3cacae7d2c42c5f5799c7aa50026598ae60` |
+| base APK SHA-256 | `6befd98c06155b2b4583f57cd76d7b721e342fed77025a94b653e03e18b5c8a8` |
+| patched APK SHA-256 | `6214d7bd3d292f41675f044b1862b386f9a5bad3c40cd91aefb9fbfe9cb33f13` |
+| patched APK size | 23,167,296 bytes |
+
+Every step of that run succeeded too. The hooks land on the same registers of
+that build: the prompt in `v8`, the replaced content in `v3` and the appended
+content in `v4`.
+
 The runs need the hash-pinned source location, which is read from
 `.github/pinned-source.env` and from `.github/pinned-294-source.env`.
 That file points at the owner's own Drive copy and is **not part of the project**: it is removed
@@ -269,10 +291,11 @@ reports a pass it did not perform.
    checks that need it: install the patched APK, log in with the official flow, send a chat
    message, and record the observer events (frequency, full accumulated content, duplicates,
    thread, lifecycle, UI stalls) without logging anything sensitive.
-2. **The 2.7.4/294 build is not device proven.** It now has its own fingerprint set and the
-   patches were applied to its base APK in the run `42358670995`, so it is *patch-applied*. It
-   was not started on a device, so the target stays experimental. The fingerprint sets do not
-   mix: the set of the build 293 does not resolve in the build 294 and the other way round.
+2. **The builds 294 and 296 are not device proven.** Both have their own fingerprint set and
+   the patches were applied to their base APK in the runs `42358670995` and `42360116129`, so
+   they are *patch-applied*. They were not started on a device, so their targets stay
+   experimental. The fingerprint sets do not mix: the set of one build does not resolve in
+   another build, and the harness proves that for every pair.
 3. **The console entry point** is now also a plain floating view inside the official chat
    screen, inserted by the patch `Super DeepSeek native Agent chat entry`. The call site is
    proved in the patched DEX, but the placement and the touch behaviour on a device are not.

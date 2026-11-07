@@ -77,6 +77,42 @@ run that has a pinned source.
 uses the names of that build, so the hook verification of a patched APK is
 correct for the build that was patched.
 
+## The third inspected build: DeepSeek 2.7.5, version code 296
+
+The newest release that was inspected. It is distributed as a split package,
+it needs Android 12L or newer and it is obfuscated on its own, so every class
+name of the builds with the version codes 293 and 294 changed.
+
+| Role | Build 293 | Build 294 | Build 296 |
+|---|---|---|---|
+| prompt serializer | `Ljy1;->e` | `La02;->b` | `Lf02;->b` |
+| prompt field | `Lly1;->c` | `Lc02;->c` | `Lh02;->c` |
+| string writer | `Ly53;->x` | `Lv73;->x` | `La83;->x` |
+| streaming SET | `Lv44;->l` | `Lv64;->l` | `Ly64;->l` |
+| streaming APPEND | `Lv44;->m` | `Lv64;->m` | `Ly64;->m` |
+| content holder | `Ldea;` | `Leia;` | `Llia;` |
+
+The three seams of the build with the version code 296 were compared
+instruction by instruction with the seams of the build with the version code
+294: the prompt serializer matches for its first 81 instructions, the
+streaming SET path and the streaming APPEND path match completely, only the
+names changed. The launcher Activity keeps its name in every build, so the
+fingerprint of the Activity is shared.
+
+### The apply proof of the build with the version code 296
+
+| Item | Value |
+|---|---|
+| run | `42360116129` |
+| source package SHA-256 | `2362b0d6d98fd7288cc25fb889f4f3cacae7d2c42c5f5799c7aa50026598ae60` |
+| base APK SHA-256 | `6befd98c06155b2b4583f57cd76d7b721e342fed77025a94b653e03e18b5c8a8` |
+| patched APK SHA-256 | `6214d7bd3d292f41675f044b1862b386f9a5bad3c40cd91aefb9fbfe9cb33f13` |
+| patched APK size | 23,167,296 bytes |
+| hooks | `beforePrompt` reads `v8`, the SET observer reads `v3`, the APPEND observer reads `v4` |
+
+Every step of that run succeeded, Morphe reported `success=True` and the
+result JSON lists the four applied patches.
+
 ## The apply proof of the build with the version code 294
 
 The workflow `verify-294-build-patches.yml` takes the base APK out of the

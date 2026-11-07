@@ -68,3 +68,26 @@ They do not prove that the network stream, incremental SSE handling, Compose mes
 - Re-inspect method descriptors and instruction context for each new DeepSeek release before adding an AppTarget.
 - Every build needs its own fingerprint set, and the set is selected by the
   version code of the APK that is patched. See [FINGERPRINTS.md](FINGERPRINTS.md).
+
+## The third inspected build: DeepSeek 2.7.5, version code 296
+
+| Item | Value |
+|---|---|
+| package | `com.deepseek.chat` |
+| version code | 296 |
+| version name | 2.7.5 |
+| minimum SDK | 32 (Android 12L) |
+| target SDK | 36 |
+| base APK SHA-256 | `6befd98c06155b2b4583f57cd76d7b721e342fed77025a94b653e03e18b5c8a8` |
+| base APK size | 17,781,056 bytes |
+| DEX files | 4 (`classes.dex`, `classes2.dex`, `classes3.dex`, `classes4.dex`) |
+
+This build comes from the XAPK of the owner. It is a split package: the base
+APK holds the code and the two split APKs hold the native libraries for
+`arm64-v8a` and the icon for `mdpi`. The launcher Activity of this build is
+`com.deepseek.chat.MainActivity` and it keeps that name, like in the other
+builds.
+
+The patches were applied to the base APK of this build in the run
+`42360116129` and every step of that run succeeded, but the build was not run
+on a device, so its target stays experimental.

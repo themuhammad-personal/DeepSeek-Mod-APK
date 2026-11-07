@@ -68,6 +68,7 @@ what the next blocker is.
 |---|---|---|
 | The patches apply to the inspected target and Morphe reports success | **patch-applied** | CI run `42358670810` applied the **current** patch set to the pinned target: every step of the workflow succeeded, the four patches were applied and Morphe reported `success=True` |
 | The patches apply to the build with the version code 294 | **patch-applied** | CI run `42358670995` applied the **current** patch set to the base APK of that build: every step succeeded, the four patches were applied, the result JSON reports `success=True` and the hook call sites were verified in the patched DEX |
+| The patches apply to the newest build with the version code 296 | **patch-applied** | CI run `42360116129` applied the **current** patch set to the base APK of DeepSeek 2.7.5: every step succeeded, the four patches were applied, the result JSON reports `success=True` and the hook call sites were verified in the patched DEX |
 | The fingerprint set of every inspected build is bound to its own build | **static-verified** and **patch-applied** | `scripts/verify_fingerprints.py` proves that the set of the build 293 does not resolve in the build 294 and the other way round, and both workflows ran that check before they applied the patches |
 | The hook call sites read the register that the original code just wrote | **patch-applied** | the DEX comparison of the verifier, `OK beforePrompt receives the prompt register v8`, `OK observeResponse receives the accumulated content register v4`, and the same registers in the build with the version code 294 |
 | The guarded prompt is written back into the request | **patch-applied** | the verifier fails when it is not |
@@ -94,6 +95,19 @@ the rebuilt target and of the patched APK.
 | patched APK size | 31,278,285 bytes |
 | source bundle SHA-256 | `b0ec418ec9b8a273479acd8fed73acefbdbddd34162684c50e1737abb70d74de` |
 | Morphe patch bundle artefact of the earlier run | `sha256:ceac6957e34065d5c8de4bdeea507d07c87bef69b9542bcb8cc73f810aab43dd` |
+
+### The artefacts of the full apply verification of the build with the version code 296
+
+Run `42360116129` took the base APK out of the XAPK of the owner, checked the
+fingerprint set of that build, applied the four patches and verified the hook
+call sites in the patched DEX.
+
+| Item | Value |
+|---|---|
+| source package SHA-256 | `2362b0d6d98fd7288cc25fb889f4f3cacae7d2c42c5f5799c7aa50026598ae60` |
+| base APK SHA-256 | `6befd98c06155b2b4583f57cd76d7b721e342fed77025a94b653e03e18b5c8a8` |
+| patched APK SHA-256 | `6214d7bd3d292f41675f044b1862b386f9a5bad3c40cd91aefb9fbfe9cb33f13` |
+| patched APK size | 23,167,296 bytes |
 
 ### The artefacts of the full apply verification of the build with the version code 294
 
