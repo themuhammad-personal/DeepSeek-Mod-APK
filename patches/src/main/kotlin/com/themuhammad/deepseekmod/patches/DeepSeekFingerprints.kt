@@ -32,6 +32,19 @@ internal object ChatPromptSerializerFingerprint : Fingerprint(
 )
 
 /**
+ * The launcher Activity of the official app.
+ *
+ * Unlike the chat classes, this class and this method keep their original
+ * names, so the fingerprint does not depend on the obfuscation mapping.
+ */
+internal object MainActivityOnCreateFingerprint : Fingerprint(
+    definingClass = "Lcom/deepseek/chat/MainActivity;",
+    name = "onCreate",
+    returnType = "V",
+    parameters = listOf("Landroid/os/Bundle;")
+)
+
+/**
  * The SSE JSON-patch path resolves ResponseFragment.content to a mutable v44.
  * SET decodes a replacement String then updates its state holder with dea.j().
  */

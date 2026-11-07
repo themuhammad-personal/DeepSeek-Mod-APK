@@ -98,6 +98,21 @@ internal fun resolvePromptAccess(method: Method): PromptAccess {
 }
 
 /**
+ * Resolves the index of the last `return-void` of a method.
+ *
+ * The chat entry hook is inserted in front of that instruction, so the original
+ * code of the method runs completely before the entry is attached.
+ */
+internal fun resolveReturnIndex(method: Method): Int {
+    val instructions = instructionsOf(method, "method")
+    val index = instructions.indexOfLast { instruction ->
+        instruction.opcode == Opcode.RETURN_VOID
+    }
+    check(index >= 0) { "The method does not end with a return-void instruction." }
+    return index
+}
+
+/**
  * Resolves the content update call of the streaming SET path.
  *
  * The inspected SET path decodes the replacement value and writes it into the content

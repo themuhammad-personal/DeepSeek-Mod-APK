@@ -16,9 +16,11 @@ Checks performed on the patched APK:
   4. the streaming ResponseFragment APPEND method calls SdsAgentHooks.observeResponse
      with the register that carries the complete accumulated content into
      Ldea;->m, and that register is the one produced by StringBuilder.toString(),
-  5. the native Agent Console Activity is declared in the manifest,
-  6. the original DeepSeek launcher Activity is still declared,
-  7. when the unpatched target is given, the patch introduces no new reference to a
+  5. the launcher Activity attaches the native Agent Console entry at the end of
+     its own onCreate,
+  6. the native Agent Console Activity is declared in the manifest,
+  7. the original DeepSeek launcher Activity is still declared,
+  8. when the unpatched target is given, the patch introduces no new reference to a
      type that is not defined in any DEX file.
 
 Usage:
@@ -48,6 +50,7 @@ CONSOLE_ACTIVITY = "com.themuhammad.deepseekmod.extension.SdsAgentConsoleActivit
 
 BEFORE_PROMPT = HOOKS_CLASS + "->beforePrompt(Ljava/lang/String;)Ljava/lang/String;"
 OBSERVE_RESPONSE = HOOKS_CLASS + "->observeResponse(Ljava/lang/String;)V"
+CHAT_ENTRY_HOOK = EXTENSION_PACKAGE + "SdsChatEntry;->attach(Landroid/app/Activity;)V"
 
 PROMPT_FIELD = "Lly1;->c"
 CONTENT_SET = "Ldea;->j("
@@ -63,6 +66,7 @@ REQUIRED_EXTENSION_CLASSES = [
     EXTENSION_PACKAGE + "SdsToolResult;",
     EXTENSION_PACKAGE + "SdsCoreMarker;",
     EXTENSION_PACKAGE + "SdsAgentConsoleActivity;",
+    EXTENSION_PACKAGE + "SdsChatEntry;",
 ]
 
 # Type descriptors are collected from the disassembled output of the DEX files.
@@ -323,7 +327,31 @@ def main() -> int:
                     failures.append("the StringBuilder result is not moved into a register")
                     print("  FAILED  the StringBuilder result is not moved into a register")
 
-    print("\n[5] manifest")
+    print("\n[5] chat entry hook")
+    on_create = find_method(dexes, "Lcom/deepseek/chat/MainActivity;", "onCreate", "(Landroid/os/Bundle;)V")
+    if on_create is None:
+        failures.append("the launcher Activity MainActivity.onCreate was not found")
+        print("  MISSING MainActivity.onCreate")
+    else:
+        on_create_instructions = instructions_of(on_create)
+        entry_index, _ = find_instruction(on_create_instructions, CHAT_ENTRY_HOOK)
+        if entry_index < 0:
+            failures.append("the launcher Activity does not call SdsChatEntry.attach")
+            print("  MISSING SdsChatEntry.attach call")
+        else:
+            print("  OK      MainActivity.onCreate calls SdsChatEntry.attach")
+            following = (
+                on_create_instructions[entry_index + 1]
+                if entry_index + 1 < len(on_create_instructions)
+                else None
+            )
+            if following is not None and following.get_name() == "return-void":
+                print("  OK      the entry is attached after the original onCreate body")
+            else:
+                failures.append("the chat entry is not attached at the end of onCreate")
+                print("  FAILED  the chat entry is not attached at the end of onCreate")
+
+    print("\n[6] manifest")
     from androguard.core.apk import APK
 
     apk_analysis = APK(str(apk))
@@ -340,7 +368,7 @@ def main() -> int:
 
     if len(sys.argv) == 3:
         source_apk = Path(sys.argv[2])
-        print("\n[6] undefined type references")
+        print("\n[7] undefined type references")
         if not source_apk.is_file():
             failures.append(f"unpatched APK not found: {source_apk}")
             print(f"  MISSING unpatched APK: {source_apk}")
@@ -362,7 +390,7 @@ def main() -> int:
             else:
                 print("  OK      the patch introduced no new undefined type reference")
     elif len(sys.argv) > 3:
-        print("\n[6] undefined type references")
+        print("\n[7] undefined type references")
         print("  SKIPPED only one APK was given, the comparison needs the unpatched target too")
         failures.append("too many arguments")
 

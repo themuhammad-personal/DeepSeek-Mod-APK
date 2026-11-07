@@ -195,6 +195,7 @@ jobs:
             --enable "DeepSeek 2.7.4 compatibility check" \
             --enable "Native Agent hook points (experimental)" \
             --enable "Super DeepSeek native Agent Console" \
+            --enable "Super DeepSeek native Agent chat entry" \
             --result-file "$RUNNER_TEMP/deepseek-verify/patch-result.json" \
             --out "$RUNNER_TEMP/deepseek-verify/deepseek-patched.apk" \
             "$RUNNER_TEMP/deepseek-verify/deepseek-pinned.apk" \
@@ -250,6 +251,7 @@ jobs:
               "DeepSeek 2.7.4 compatibility check",
               "Native Agent hook points (experimental)",
               "Super DeepSeek native Agent Console",
+              "Super DeepSeek native Agent chat entry",
           ]
           applied = data.get("appliedPatches") or []
           failed = data.get("failedPatches") or []
