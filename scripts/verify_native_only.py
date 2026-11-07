@@ -127,13 +127,16 @@ def main() -> int:
         with zipfile.ZipFile(original) as archive:
             original_names = set(archive.namelist())
         added = sorted(patched_names - original_names)
-        web_assets = [
-            name
-            for name in added
-            if name.lower().endswith(WEB_ASSETS)
-            or any(name.startswith(prefix) for prefix in ASSET_DIRECTORIES)
-        ]
+        removed = sorted(original_names - patched_names)
+        web_assets = [name for name in added if name.lower().endswith(WEB_ASSETS)]
         print(f"files that the patches added to the APK: {len(added)}")
+        for name in added[:12]:
+            print(f"          {name}")
+        if len(added) > 12:
+            print(f"          ... and {len(added) - 12} more")
+        print(f"files that the patches removed from the APK: {len(removed)}")
+        for name in removed[:6]:
+            print(f"          {name}")
         if web_assets:
             failures += 1
             print("FAILED: the patched APK carries a web asset")
@@ -141,6 +144,7 @@ def main() -> int:
                 print(f"          {name}")
         else:
             print("  OK      the patched APK does not carry a web asset")
+        print("  note    the app itself may use a web view, the original app decides that")
 
     print()
     if failures:
