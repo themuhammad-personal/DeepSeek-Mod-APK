@@ -244,6 +244,15 @@ jobs:
             "$RUNNER_TEMP/deepseek-build/original.apk" \
             > "$RUNNER_TEMP/native-verification.log" 2>&1 || status=$?
           cat "$RUNNER_TEMP/native-verification.log"
+          if [[ "$status" -ne 0 ]]; then
+            grep -E "FAILED" "$RUNNER_TEMP/native-verification.log" | head -4 | while IFS= read -r line; do
+              printf '::error title=The app has to stay native::%s\n' "${line//$'\r'/}"
+            done
+          else
+            grep -E "^          " "$RUNNER_TEMP/native-verification.log" | head -8 | while IFS= read -r line; do
+              printf '::notice title=The files that the patches added::%s\n' "${line//$'\r'/}"
+            done
+          fi
           exit "$status"
 
       - name: Write the build report
