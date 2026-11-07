@@ -75,6 +75,25 @@ The names of the seams of that build were found by the twin search of
 `scripts/find_build_twin.py`, which reproduces the fingerprint sets of the
 builds with the version codes 293, 294 and 296 exactly.
 
+### 1.4 The split build of the owner
+
+The XAPK of the Drive of the owner is a split build of the same app version,
+the version code 296, with a minimum SDK of 32. It has its own fingerprint
+set and its own apply proof, and the workflow of that build now runs the
+harness of the login and the harness of the native only rule as well.
+
+| Property | Value |
+| --- | --- |
+| The source | `DeepSeek_2.7.5_APKPure.xapk` of the Drive of the owner, 27,047,605 bytes |
+| The checksum of the source | `2362b0d6d98fd7288cc25fb889f4f3cacae7d2c42c5f5799c7aa50026598ae60` |
+| The run | `42365853485` of the workflow **Verify Morphe patches against the DeepSeek build with the version code 296** |
+| The artifact | `deepseek-patched-apk-296` of that run, it expires on 2026-11-14 |
+| The login is untouched | passed | `scripts/verify_login_untouched.py` in the run |
+| The app stays native | passed | `scripts/verify_native_only.py` in the run |
+
+The link share of that file was revoked right after the run and the file was
+moved into the trash of the Drive again, so it is private to the owner.
+
 ---
 
 ## 2. What the CI run does

@@ -169,6 +169,7 @@ descriptor, so its result for the build 295 was trusted and written into
 | Patched APK SHA-256 | `eb7f8d94c180da1888829220bba9916cc2e08a51483088c730d43d669ad1e54d` (24,147,026 bytes) |
 | The artifact | `deepseek-patched-apk` of that run, it expires on 2026-11-14 |
 | The patches that were applied | the four patches of this project, the patch result JSON of the run lists them |
+| The split build of the owner | the artifact `deepseek-patched-apk-296` of the run `42365853485`, the build with the version code 296 |
 
 The checksum of the patched APK is different in every run, because the Morphe
 CLI signs every build with a new throwaway key. The checksum above belongs to
