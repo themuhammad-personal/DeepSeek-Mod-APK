@@ -48,6 +48,11 @@ public final class SdsToolRegistry {
         return Collections.unmodifiableList(new ArrayList<>(tools.keySet()));
     }
 
+    /** The registered tools themselves, so a caller can copy them into another registry. */
+    public List<SdsTool> all() {
+        return Collections.unmodifiableList(new ArrayList<>(tools.values()));
+    }
+
     /** A description of the allow-list for the console. */
     public List<String> describe() {
         List<String> lines = new ArrayList<>();

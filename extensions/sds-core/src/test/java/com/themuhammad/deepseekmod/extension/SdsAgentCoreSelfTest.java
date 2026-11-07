@@ -29,6 +29,8 @@ public final class SdsAgentCoreSelfTest {
         testProjectRegistry();
         testSlashCommands();
         testPromptExpansion();
+        testArtifactStore();
+        testArtifactTools();
         System.out.println("SDS agent-core self-test: PASS (" + checks + " checks)");
     }
 
@@ -369,6 +371,74 @@ public final class SdsAgentCoreSelfTest {
     private static void check(boolean condition, String message) {
         checks++;
         if (!condition) throw new AssertionError(message);
+    }
+
+    private static void testArtifactStore() throws Exception {
+        File parent = Files.createTempDirectory("sds-artifact-test").toFile();
+        File file = new File(parent, "artifacts.txt");
+        SdsArtifactStore store = new SdsArtifactStore(file);
+        check(store.size() == 0, "a new artifact store must be empty");
+        SdsArtifactStore.Artifact artifact = store.create("My snippet", "kotlin", "fun main() {}");
+        check(store.size() == 1, "the artifact must be stored");
+        check(artifact.getId().startsWith("a-"), "the artifact must have an id");
+        check("kotlin".equals(artifact.getLanguage()), "the artifact language must be kept");
+        check("fun main() {}".equals(artifact.getContent()), "the artifact content must be kept");
+        check(artifact.getExportName().equals("My-snippet.kotlin"), "the export name must be safe");
+
+        boolean rejected = false;
+        try { store.create("", "text", "x"); } catch (IllegalArgumentException expected) { rejected = true; }
+        check(rejected, "an artifact without a title must be rejected");
+        rejected = false;
+        try { store.create("title", "text/plain", "x"); } catch (IllegalArgumentException expected) { rejected = true; }
+        check(rejected, "an artifact language with a slash must be rejected");
+
+        SdsArtifactStore reopened = new SdsArtifactStore(file);
+        check(reopened.size() == 1, "the artifact must survive a restart");
+        check(reopened.find(artifact.getId()) != null, "the artifact must be found after a restart");
+        check(reopened.delete(artifact.getId()), "the artifact must be removable");
+        check(reopened.size() == 0, "the artifact must be gone");
+        deleteTree(parent);
+    }
+
+    private static void testArtifactTools() throws Exception {
+        File parent = Files.createTempDirectory("sds-artifact-tool-test").toFile();
+        File workspace = new File(parent, "workspace");
+        check(workspace.mkdirs(), "workspace create failed");
+        SdsRuntimeRegistry.setWorkspace(workspace);
+        SdsRuntimeRegistry.setArtifactStore(new SdsArtifactStore(new File(parent, "artifacts.txt")));
+
+        SdsToolRegistry registry = SdsArtifactTools.createRegistry();
+        check(registry.contains(SdsArtifactTools.CREATE), "the create tool must be registered");
+        check(registry.contains(SdsArtifactTools.LIST), "the list tool must be registered");
+        check(registry.contains(SdsArtifactTools.READ), "the read tool must be registered");
+
+        SdsToolContext context = new SdsToolContext(workspace, SdsExecutionPolicy.SAFE_DEFAULT,
+                new SdsCancellation());
+        SdsTool create = registry.find(SdsArtifactTools.CREATE);
+        check(!create.isReadOnly(), "the create tool must not be read-only");
+        check(!create.requiresNetwork(), "the create tool must not need the network");
+
+        SdsToolResult created = create.execute(context,
+                new SdsToolCall("call-1", SdsArtifactTools.CREATE,
+                        "{\"title\":\"Report\",\"language\":\"markdown\",\"content\":\"# Report\"}"));
+        check(created.getStatus() == SdsToolResult.Status.OK, "the artifact must be created");
+        check(created.getOutput().contains("Report"), "the result must mention the artifact");
+
+        SdsToolResult refused = create.execute(context,
+                new SdsToolCall("call-2", SdsArtifactTools.CREATE,
+                        "{\"title\":\"Report\",\"content\":\"x\",\"unknown\":1}"));
+        check(refused.getStatus() == SdsToolResult.Status.FAILED, "an unknown argument must be refused");
+
+        SdsTool list = registry.find(SdsArtifactTools.LIST);
+        SdsToolResult listed = list.execute(context, new SdsToolCall("call-3", SdsArtifactTools.LIST, "{}"));
+        check(listed.getStatus() == SdsToolResult.Status.OK, "the artifacts must be listed");
+        check(listed.getOutput().contains("Report"), "the list must contain the artifact");
+
+        SdsTool read = registry.find(SdsArtifactTools.READ);
+        SdsToolResult missing = read.execute(context,
+                new SdsToolCall("call-4", SdsArtifactTools.READ, "{\"id\":\"a-missing\"}"));
+        check(missing.getStatus() == SdsToolResult.Status.FAILED, "an unknown artifact must fail");
+        deleteTree(parent);
     }
 
     private static void testMemoryStore() throws Exception {

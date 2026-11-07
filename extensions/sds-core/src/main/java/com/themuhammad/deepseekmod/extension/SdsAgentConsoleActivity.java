@@ -47,6 +47,7 @@ public final class SdsAgentConsoleActivity extends Activity {
     private LinearLayout memoryList;
     private LinearLayout projectList;
     private LinearLayout commandList;
+    private LinearLayout artifactList;
     private TextView queueStatus;
     private TextView sessionStatus;
     private TextView diagnosticsStatus;
@@ -64,6 +65,9 @@ public final class SdsAgentConsoleActivity extends Activity {
         workspace.mkdirs();
         SdsAppContext.initialize(getApplicationContext());
         registry = SdsWorkspaceTools.createRegistry();
+        for (SdsTool tool : SdsArtifactTools.createRegistry().all()) {
+            registry.register(tool);
+        }
         executor = new SdsToolExecutor(registry, SdsExecutionPolicy.SAFE_DEFAULT);
         buildScreen();
         proposalMode.setChecked(SdsAgentHooks.isEnabled());
@@ -242,6 +246,28 @@ public final class SdsAgentConsoleActivity extends Activity {
         addGap(root, 12);
         root.addView(projectCard, matchWrap());
 
+        LinearLayout artifactCard = card();
+        artifactCard.addView(text("Artifacts", 16, TEXT, true), matchWrap());
+        TextView artifactNote = text(
+                "Content the assistant produced. It stays in the private directory until you save or share it.",
+                11, MUTED, false);
+        LinearLayout.LayoutParams artifactNoteParams = matchWrap();
+        artifactNoteParams.topMargin = dp(4);
+        artifactCard.addView(artifactNote, artifactNoteParams);
+        artifactList = new LinearLayout(this);
+        artifactList.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams artifactListParams = matchWrap();
+        artifactListParams.topMargin = dp(6);
+        artifactCard.addView(artifactList, artifactListParams);
+        addGap(root, 12);
+        root.addView(artifactCard, matchWrap());
+
+        Button exportActivity = button("Export the activity to a file");
+        exportActivity.setOnClickListener(v -> onExportTimeline());
+        LinearLayout.LayoutParams exportParams = wrapWrap();
+        exportParams.topMargin = dp(6);
+        root.addView(exportActivity, exportParams);
+
         LinearLayout commandCard = card();
         commandCard.addView(text("Slash commands", 16, TEXT, true), matchWrap());
         TextView commandNote = text(
@@ -312,6 +338,7 @@ public final class SdsAgentConsoleActivity extends Activity {
         refreshMemories();
         refreshProjects();
         refreshCommands();
+        refreshArtifacts();
     }
 
     private void onAddMemory() {
@@ -404,6 +431,108 @@ public final class SdsAgentConsoleActivity extends Activity {
             LinearLayout.LayoutParams rowParams = matchWrap();
             rowParams.topMargin = dp(4);
             projectList.addView(row, rowParams);
+        }
+    }
+
+    private void refreshArtifacts() {
+        if (artifactList == null) return;
+        artifactList.removeAllViews();
+        SdsArtifactStore store = SdsRuntimeRegistry.getArtifactStore();
+        if (store == null || store.size() == 0) {
+            artifactList.addView(text("No artifacts yet.", 13, MUTED, false), matchWrap());
+            return;
+        }
+        for (SdsArtifactStore.Artifact artifact : store.snapshot()) {
+            LinearLayout column = new LinearLayout(this);
+            column.setOrientation(LinearLayout.VERTICAL);
+            TextView title = text(
+                    artifact.getTitle() + "  [" + artifact.getLanguage() + ", "
+                            + artifact.getContentLength() + " characters]", 12, TEXT, false);
+            column.addView(title, matchWrap());
+
+            LinearLayout buttons = new LinearLayout(this);
+            buttons.setGravity(Gravity.CENTER_VERTICAL);
+            Button view = button("View");
+            view.setOnClickListener(v -> onViewArtifact(artifact));
+            buttons.addView(view, wrapWrap());
+            Button save = button("Save");
+            save.setOnClickListener(v -> onSaveArtifact(artifact));
+            buttons.addView(save, wrapWrap());
+            Button share = button("Share");
+            share.setOnClickListener(v -> onShareArtifact(artifact));
+            buttons.addView(share, wrapWrap());
+            Button delete = button("Delete");
+            delete.setOnClickListener(v -> {
+                SdsArtifactStore current = SdsRuntimeRegistry.getArtifactStore();
+                if (current != null) current.delete(artifact.getId());
+                refresh();
+            });
+            buttons.addView(delete, wrapWrap());
+            LinearLayout.LayoutParams buttonParams = matchWrap();
+            buttonParams.topMargin = dp(4);
+            column.addView(buttons, buttonParams);
+
+            LinearLayout.LayoutParams columnParams = matchWrap();
+            columnParams.topMargin = dp(6);
+            artifactList.addView(column, columnParams);
+        }
+    }
+
+    private void onViewArtifact(SdsArtifactStore.Artifact artifact) {
+        try {
+            new android.app.AlertDialog.Builder(this)
+                    .setTitle(artifact.getTitle())
+                    .setMessage(artifact.getContent())
+                    .setPositiveButton(android.content.DialogInterface.BUTTON_POSITIVE, null)
+                    .show();
+        } catch (Throwable refused) {
+            Toast.makeText(this, "The artifact could not be shown", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void onSaveArtifact(SdsArtifactStore.Artifact artifact) {
+        String name = artifact.getExportName();
+        String mime = artifact.getLanguage().equals("markdown") ? SdsExportService.MIME_MARKDOWN
+                : SdsExportService.MIME_CODE;
+        if (!SdsExportService.save(this, name, artifact.getContent(), mime)) {
+            Toast.makeText(this, "The system file picker could not be opened", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void onShareArtifact(SdsArtifactStore.Artifact artifact) {
+        if (!SdsExportService.share(this, artifact.getTitle(), artifact.getContent())) {
+            Toast.makeText(this, "The share sheet could not be opened", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, android.content.Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode != SdsExportService.REQUEST_SAVE) return;
+        if (resultCode != android.app.Activity.RESULT_OK || data == null || data.getData() == null) {
+            Toast.makeText(this, "Nothing was saved", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (SdsExportService.writePending(data.getData())) {
+            Toast.makeText(this, "The file was saved", Toast.LENGTH_SHORT).show();
+        } else {
+            Toast.makeText(this, "The file could not be written", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void onExportTimeline() {
+        StringBuilder builder = new StringBuilder("DeepSeek Agent activity\n");
+        for (SdsAgentEvent event : session.getEvents()) {
+            builder.append(event.getAtMs())
+                    .append("  ")
+                    .append(event.getType())
+                    .append("  ")
+                    .append(event.getDetail())
+                    .append('\n');
+        }
+        if (!SdsExportService.save(this, "deepseek-agent-activity.txt", builder.toString(),
+                SdsExportService.MIME_TEXT)) {
+            Toast.makeText(this, "The system file picker could not be opened", Toast.LENGTH_SHORT).show();
         }
     }
 

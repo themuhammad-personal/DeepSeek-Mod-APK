@@ -15,6 +15,7 @@ public final class SdsAppContext {
     public static final String WORKSPACE_DIRECTORY = "workspace";
     public static final String MEMORY_FILE = "sds-memory.txt";
     public static final String PROJECT_FILE = "sds-projects.txt";
+    public static final String ARTIFACT_FILE = "sds-artifacts.txt";
 
     private SdsAppContext() {
     }
@@ -38,6 +39,7 @@ public final class SdsAppContext {
             SdsRuntimeRegistry.setWorkspace(workspace);
             SdsRuntimeRegistry.setMemoryStore(new SdsMemoryStore(new File(files, MEMORY_FILE)));
             SdsRuntimeRegistry.setProjectRegistry(new SdsProjectRegistry(new File(files, PROJECT_FILE)));
+            SdsRuntimeRegistry.setArtifactStore(new SdsArtifactStore(new File(files, ARTIFACT_FILE)));
             SdsRuntimeRegistry.ensureDefaults();
         } catch (Throwable ignored) {
             // A feature that cannot prepare itself stays inactive.

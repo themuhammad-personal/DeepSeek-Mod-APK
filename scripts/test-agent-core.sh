@@ -25,6 +25,8 @@ javac -encoding UTF-8 -d "$TMP/classes" \
   "$SRC/SdsWorkspaceTools.java" \
   "$SRC/SdsMemoryStore.java" \
   "$SRC/SdsProjectRegistry.java" \
+  "$SRC/SdsArtifactStore.java" \
+  "$SRC/SdsArtifactTools.java" \
   "$SRC/SdsSlashCommands.java" \
   "$SRC/SdsRuntimeRegistry.java" \
   "$SRC/SdsAgentHooks.java"

@@ -20,6 +20,7 @@ public final class SdsRuntimeRegistry {
     private static volatile File workspace;
     private static volatile SdsMemoryStore memoryStore;
     private static volatile SdsProjectRegistry projectRegistry;
+    private static volatile SdsArtifactStore artifactStore;
     private static volatile boolean includeMemoryInPrompt;
     private static volatile boolean defaultsRegistered;
 
@@ -48,6 +49,14 @@ public final class SdsRuntimeRegistry {
 
     public static void setProjectRegistry(SdsProjectRegistry value) {
         projectRegistry = value;
+    }
+
+    public static SdsArtifactStore getArtifactStore() {
+        return artifactStore;
+    }
+
+    public static void setArtifactStore(SdsArtifactStore value) {
+        artifactStore = value;
     }
 
     /** True when the memories are added to every prompt. Off by default. */
