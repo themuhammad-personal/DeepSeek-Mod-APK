@@ -42,7 +42,7 @@ public final class SdsAppContext {
             SdsRuntimeRegistry.setArtifactStore(new SdsArtifactStore(new File(files, ARTIFACT_FILE)));
             File nativeLibraryDirectory = null;
             try {
-                nativeLibraryDirectory = target.getApplicationInfo().nativeLibraryDir;
+                nativeLibraryDirectory = new File(target.getApplicationInfo().nativeLibraryDir);
             } catch (Throwable ignored) {
                 // The runtime stays unavailable when the path is unknown.
             }
