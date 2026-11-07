@@ -197,7 +197,9 @@ jobs:
             > "$RUNNER_TEMP/morphe-apply.log" 2>&1 || status=$?
           cat "$RUNNER_TEMP/morphe-apply.log"
           if [[ "$status" -ne 0 ]]; then
-            tail -40 "$RUNNER_TEMP/morphe-apply.log" | while IFS= read -r line; do
+            # GitHub keeps only the first ten annotations of a step, so the tail of the
+            # log is emitted first and the most recent lines are the ones that matter.
+            tail -9 "$RUNNER_TEMP/morphe-apply.log" | tac | while IFS= read -r line; do
               printf '::error title=Morphe apply failed::%s\n' "${line//$'\r'/}"
             done
           fi
@@ -205,6 +207,31 @@ jobs:
         env:
           GITHUB_ACTOR: ${{ github.actor }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Report the Morphe patch result
+        if: always()
+        shell: bash
+        run: |
+          set -uo pipefail
+          RESULT="$RUNNER_TEMP/deepseek-verify/patch-result.json"
+          if [[ ! -s "$RESULT" ]]; then
+            echo "::error title=Morphe patch result::Morphe did not write a patch result JSON."
+            exit 0
+          fi
+          python3 - "$RESULT" > "$RUNNER_TEMP/result-annotations.txt" <<'PYRESULT'
+          import json, sys
+          data = json.load(open(sys.argv[1], encoding="utf-8"))
+          print(f"success={data.get('success')} reason={data.get('failureReason')}")
+          print("applied=" + ", ".join(data.get("appliedPatches") or []))
+          for patch in data.get("failedPatches") or []:
+              print(f"FAILED PATCH: {patch.get('name')}")
+              for line in (patch.get("error") or "").splitlines()[:12]:
+                  print(f"  {line}")
+          PYRESULT
+          head -9 "$RUNNER_TEMP/result-annotations.txt" | while IFS= read -r line; do
+            printf '::error title=Morphe patch result::%s\n' "${line//$'\r'/}"
+          done
+          cat "$RUNNER_TEMP/result-annotations.txt"
 
       - name: Check the Morphe patch result JSON
         if: steps.source.outputs.has_source == 'true'
@@ -232,10 +259,21 @@ jobs:
           APK="$RUNNER_TEMP/deepseek-verify/deepseek-patched.apk"
           AAPT="$ANDROID_HOME/build-tools/36.0.0/aapt"
           APKSIGNER="$ANDROID_HOME/build-tools/36.0.0/apksigner"
+          ZIPALIGN="$ANDROID_HOME/build-tools/36.0.0/zipalign"
+          DEXDUMP="$ANDROID_HOME/build-tools/36.0.0/dexdump"
           "$AAPT" dump badging "$APK" > "$RUNNER_TEMP/deepseek-verify/patched-badging.txt"
           grep -F "package: name='com.deepseek.chat' versionCode='293' versionName='2.7.4'" "$RUNNER_TEMP/deepseek-verify/patched-badging.txt"
           "$APKSIGNER" verify --verbose "$APK"
+          "$ZIPALIGN" -c -p 4 "$APK"
           "$AAPT" dump xmltree "$APK" AndroidManifest.xml | grep -F "com.themuhammad.deepseekmod.extension.SdsAgentConsoleActivity"
+          # The Android SDK disassembler validates the DEX structure of every file.
+          rm -rf "$RUNNER_TEMP/deepseek-verify/dex"
+          mkdir -p "$RUNNER_TEMP/deepseek-verify/dex"
+          unzip -o -q "$APK" '*.dex' -d "$RUNNER_TEMP/deepseek-verify/dex"
+          for dex in "$RUNNER_TEMP/deepseek-verify/dex"/*.dex; do
+            "$DEXDUMP" -f "$dex" > /dev/null
+            echo "dexdump OK: $(basename "$dex")"
+          done
 
       - name: Verify the hook call sites in the patched DEX
         if: steps.source.outputs.has_source == 'true'
