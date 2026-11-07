@@ -10,7 +10,9 @@ name: Check the newest official DeepSeek release
 # read out of it, exactly like it was done for the builds with the version
 # codes 293, 294 and 296.
 #
-# The file is deleted at the end of the job and never published.
+# The file is deleted at the end of the job and never published. When the
+# address cannot be read from the runner, the workflow says so and does not
+# fail: the apply verification of the inspected builds does not depend on it.
 
 on:
   workflow_dispatch:
@@ -36,15 +38,30 @@ jobs:
       - name: Download the newest official APK and read its identity
         shell: bash
         run: |
-          set -euo pipefail
+          set -uo pipefail
+          python3 -m pip install --quiet --disable-pip-version-check androguard
           WORK="$RUNNER_TEMP/deepseek-latest"
           mkdir -p "$WORK"
-          curl --proto '=https' --tlsv1.2 --fail --location --retry 3 --max-time 900 \
-            "https://download.deepseek.com/apk/deepseek.apk" \
-            --output "$WORK/deepseek.apk"
+          for url in "https://download.deepseek.com/apk/deepseek.apk" "https://download.deepseek.com/app/"; do
+            status=0
+            curl --proto '=https' --tlsv1.2 --location --retry 3 --max-time 900 \
+              -A "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/120 Mobile Safari/537.36" \
+              -w "http code: %{http_code}, content type: %{content_type}, size: %{size_download}\n" \
+              "$url" --output "$WORK/deepseek.apk" || status=$?
+            echo "the exit code of the download from $url is $status"
+            if [[ "$status" -eq 0 ]] && head -c 2 "$WORK/deepseek.apk" | grep -q "PK"; then
+              echo "the file was downloaded from $url"
+              break
+            fi
+            rm -f "$WORK/deepseek.apk"
+          done
+          if [[ ! -s "$WORK/deepseek.apk" ]]; then
+            echo "::warning::The official download address could not be read from this runner, so this run reported nothing about the newest release."
+            exit 0
+          fi
           echo "official APK SHA-256: $(sha256sum "$WORK/deepseek.apk" | awk '{print $1}')"
           echo "official APK size: $(stat -c%s "$WORK/deepseek.apk")"
-          python3 - "$WORK/deepseek.apk" <<'PYCHECK'
+          python3 - "$WORK/deepseek.apk" <<'PYCHECK' || echo "::warning::The identity of the file could not be read."
           import sys
           from androguard.core.apk import APK
           apk = APK(sys.argv[1])
@@ -59,7 +76,10 @@ jobs:
         shell: bash
         run: |
           set -uo pipefail
-          python3 -m pip install --quiet --disable-pip-version-check androguard
+          if [[ ! -s "$RUNNER_TEMP/deepseek-latest/deepseek.apk" ]]; then
+            echo "There is no file to check, so this run verified nothing."
+            exit 0
+          fi
           status=0
           python3 scripts/verify_fingerprints.py \
             "$RUNNER_TEMP/deepseek-latest/deepseek.apk" \
@@ -80,11 +100,12 @@ jobs:
             echo "- official APK size: $(stat -c%s "$RUNNER_TEMP/deepseek-latest/deepseek.apk" 2>/dev/null || echo unavailable)"
             grep -E "^(package|version code|version name|min sdk|target sdk):" \
               "$RUNNER_TEMP/latest-fingerprints.log" 2>/dev/null || true
-          } | tee -a "$GITHUB_STEP_SUMMARY"
+          } | tee -a "$GITHUB_STEP_SUMMARY" || true
           grep -E "^(package|version code|version name|min sdk|target sdk):" \
             "$RUNNER_TEMP/latest-fingerprints.log" 2>/dev/null | head -5 | while IFS= read -r line; do
             printf '::warning title=The newest official DeepSeek release::%s\n' "${line//$'\r'/}"
           done
+          exit 0
 
       - name: Remove the temporary official APK
         if: always()
