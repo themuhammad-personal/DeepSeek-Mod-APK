@@ -21,6 +21,7 @@ public final class SdsRuntimeRegistry {
     private static volatile SdsMemoryStore memoryStore;
     private static volatile SdsProjectRegistry projectRegistry;
     private static volatile SdsArtifactStore artifactStore;
+    private static volatile SdsUiSpec lastUiSpec;
     private static volatile boolean includeMemoryInPrompt;
     private static volatile boolean defaultsRegistered;
 
@@ -49,6 +50,15 @@ public final class SdsRuntimeRegistry {
 
     public static void setProjectRegistry(SdsProjectRegistry value) {
         projectRegistry = value;
+    }
+
+    /** The interface the assistant asked for last, or null. */
+    public static SdsUiSpec getLastUiSpec() {
+        return lastUiSpec;
+    }
+
+    public static void setLastUiSpec(SdsUiSpec value) {
+        lastUiSpec = value;
     }
 
     public static SdsArtifactStore getArtifactStore() {

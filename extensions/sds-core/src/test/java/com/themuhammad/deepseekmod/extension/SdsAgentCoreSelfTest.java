@@ -31,6 +31,7 @@ public final class SdsAgentCoreSelfTest {
         testPromptExpansion();
         testArtifactStore();
         testArtifactTools();
+        testGenerativeUi();
         System.out.println("SDS agent-core self-test: PASS (" + checks + " checks)");
     }
 
@@ -371,6 +372,53 @@ public final class SdsAgentCoreSelfTest {
     private static void check(boolean condition, String message) {
         checks++;
         if (!condition) throw new AssertionError(message);
+    }
+
+    private static void testGenerativeUi() throws Exception {
+        File parent = Files.createTempDirectory("sds-ui-test").toFile();
+        File workspace = new File(parent, "workspace");
+        check(workspace.mkdirs(), "workspace create failed");
+        SdsRuntimeRegistry.setWorkspace(workspace);
+        SdsRuntimeRegistry.setLastUiSpec(null);
+
+        SdsToolRegistry registry = SdsUiTools.createRegistry();
+        check(registry.contains(SdsUiTools.RENDER), "the render tool must be registered");
+        SdsTool render = registry.find(SdsUiTools.RENDER);
+        check(render.isReadOnly(), "the render tool must be read-only");
+        check(!render.requiresNetwork(), "the render tool must not need the network");
+
+        SdsToolContext context = new SdsToolContext(workspace, SdsExecutionPolicy.SAFE_DEFAULT,
+                new SdsCancellation());
+        SdsToolResult rendered = render.execute(context, new SdsToolCall("call-1", SdsUiTools.RENDER,
+                "{\"title\":\"Plan\",\"subtitle\":\"three steps\",\"items\":\"one\\ntwo\\nthree\","
+                        + "\"code\":\"println(1)\",\"language\":\"kotlin\","
+                        + "\"action\":\"Copy\",\"argument\":\"plan.txt\"}"));
+        check(rendered.getStatus() == SdsToolResult.Status.SUCCESS, "the interface must be rendered");
+        check(rendered.getOutput().contains("Plan"), "the result must mention the interface");
+
+        SdsUiSpec spec = SdsRuntimeRegistry.getLastUiSpec();
+        check(spec != null, "the interface must be stored");
+        check("Plan".equals(spec.getTitle()), "the title must be kept");
+        check(3 == spec.getItems().size(), "the items must be split by the line break");
+        check(spec.hasAction(), "the action must be kept");
+        check("plan.txt".equals(spec.getArgument()), "the argument must be kept");
+        check("kotlin".equals(spec.getLanguage()), "the language must be kept");
+
+        SdsToolResult empty = render.execute(context,
+                new SdsToolCall("call-2", SdsUiTools.RENDER, "{}"));
+        check(empty.getStatus() == SdsToolResult.Status.FAILED, "an empty interface must be refused");
+
+        SdsToolResult refused = render.execute(context,
+                new SdsToolCall("call-3", SdsUiTools.RENDER, "{\"html\":\"<script>\"}"));
+        check(refused.getStatus() == SdsToolResult.Status.FAILED, "an unknown argument must be refused");
+
+        // The bounds of the specification.
+        StringBuilder longItems = new StringBuilder();
+        for (int index = 0; index < 50; index++) longItems.append("item\n");
+        SdsUiSpec bounded = SdsUiSpec.fromArguments("t", "s", "b", longItems.toString(), "", "text", "", "");
+        check(bounded.getItems().size() <= SdsUiSpec.MAX_ITEMS, "the number of items must be bounded");
+        check(bounded.getTitle().length() <= SdsUiSpec.MAX_TITLE_LENGTH, "the title must be bounded");
+        deleteTree(parent);
     }
 
     private static void testArtifactStore() throws Exception {

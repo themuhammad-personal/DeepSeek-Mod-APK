@@ -48,6 +48,7 @@ public final class SdsAgentConsoleActivity extends Activity {
     private LinearLayout projectList;
     private LinearLayout commandList;
     private LinearLayout artifactList;
+    private LinearLayout uiSurface;
     private TextView queueStatus;
     private TextView sessionStatus;
     private TextView diagnosticsStatus;
@@ -66,6 +67,9 @@ public final class SdsAgentConsoleActivity extends Activity {
         SdsAppContext.initialize(getApplicationContext());
         registry = SdsWorkspaceTools.createRegistry();
         for (SdsTool tool : SdsArtifactTools.createRegistry().all()) {
+            registry.register(tool);
+        }
+        for (SdsTool tool : SdsUiTools.createRegistry().all()) {
             registry.register(tool);
         }
         executor = new SdsToolExecutor(registry, SdsExecutionPolicy.SAFE_DEFAULT);
@@ -246,6 +250,23 @@ public final class SdsAgentConsoleActivity extends Activity {
         addGap(root, 12);
         root.addView(projectCard, matchWrap());
 
+        LinearLayout uiCard = card();
+        uiCard.addView(text("Generative UI", 16, TEXT, true), matchWrap());
+        TextView uiNote = text(
+                "An interface the assistant asked for. It is built from plain Android views, "
+                        + "so no script and no remote content is involved.",
+                11, MUTED, false);
+        LinearLayout.LayoutParams uiNoteParams = matchWrap();
+        uiNoteParams.topMargin = dp(4);
+        uiCard.addView(uiNote, uiNoteParams);
+        uiSurface = new LinearLayout(this);
+        uiSurface.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams uiSurfaceParams = matchWrap();
+        uiSurfaceParams.topMargin = dp(6);
+        uiCard.addView(uiSurface, uiSurfaceParams);
+        addGap(root, 12);
+        root.addView(uiCard, matchWrap());
+
         LinearLayout artifactCard = card();
         artifactCard.addView(text("Artifacts", 16, TEXT, true), matchWrap());
         TextView artifactNote = text(
@@ -339,6 +360,7 @@ public final class SdsAgentConsoleActivity extends Activity {
         refreshProjects();
         refreshCommands();
         refreshArtifacts();
+        refreshGenerativeUi();
     }
 
     private void onAddMemory() {
@@ -431,6 +453,75 @@ public final class SdsAgentConsoleActivity extends Activity {
             LinearLayout.LayoutParams rowParams = matchWrap();
             rowParams.topMargin = dp(4);
             projectList.addView(row, rowParams);
+        }
+    }
+
+    private void refreshGenerativeUi() {
+        if (uiSurface == null) return;
+        uiSurface.removeAllViews();
+        SdsUiSpec spec = SdsRuntimeRegistry.getLastUiSpec();
+        if (spec == null) {
+            uiSurface.addView(text("No interface was requested yet.", 13, MUTED, false), matchWrap());
+            return;
+        }
+        if (!spec.getTitle().isEmpty()) {
+            TextView title = text(spec.getTitle(), 17, TEXT, true);
+            uiSurface.addView(title, matchWrap());
+        }
+        if (!spec.getSubtitle().isEmpty()) {
+            TextView subtitle = text(spec.getSubtitle(), 12, MUTED, false);
+            LinearLayout.LayoutParams params = matchWrap();
+            params.topMargin = dp(2);
+            uiSurface.addView(subtitle, params);
+        }
+        if (!spec.getBody().isEmpty()) {
+            TextView body = text(spec.getBody(), 13, Color.rgb(203, 215, 232), false);
+            LinearLayout.LayoutParams params = matchWrap();
+            params.topMargin = dp(6);
+            uiSurface.addView(body, params);
+        }
+        for (String item : spec.getItems()) {
+            TextView line = text("\u2022  " + item, 13, Color.rgb(203, 215, 232), false);
+            LinearLayout.LayoutParams params = matchWrap();
+            params.topMargin = dp(3);
+            uiSurface.addView(line, params);
+        }
+        if (!spec.getCode().isEmpty()) {
+            TextView code = text(spec.getCode(), 12, Color.rgb(180, 210, 255), false);
+            code.setTypeface(Typeface.MONOSPACE);
+            code.setBackgroundColor(Color.rgb(18, 24, 34));
+            code.setPadding(dp(8), dp(8), dp(8), dp(8));
+            LinearLayout.LayoutParams params = matchWrap();
+            params.topMargin = dp(6);
+            uiSurface.addView(code, params);
+        }
+        if (spec.hasAction()) {
+            Button action = button(spec.getAction());
+            action.setOnClickListener(v -> onGenerativeUiAction(spec));
+            LinearLayout.LayoutParams params = wrapWrap();
+            params.topMargin = dp(8);
+            uiSurface.addView(action, params);
+        }
+    }
+
+    private void onGenerativeUiAction(SdsUiSpec spec) {
+        String argument = spec.getArgument();
+        if (argument.isEmpty()) {
+            Toast.makeText(this, "The action carries no argument", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        try {
+            android.content.ClipData clip = android.content.ClipData.newPlainText("DeepSeek", argument);
+            android.content.ClipboardManager clipboard =
+                    (android.content.ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+            if (clipboard == null) {
+                Toast.makeText(this, "The clipboard is not available", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            clipboard.setPrimaryClip(clip);
+            Toast.makeText(this, "The argument was copied to the clipboard", Toast.LENGTH_SHORT).show();
+        } catch (Throwable refused) {
+            Toast.makeText(this, "The action could not be carried out", Toast.LENGTH_SHORT).show();
         }
     }
 
