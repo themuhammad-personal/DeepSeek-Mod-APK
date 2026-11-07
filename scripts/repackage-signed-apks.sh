@@ -88,7 +88,7 @@ sign_one() {
     'META-INF/*.RSA' 'META-INF/*.DSA' 'META-INF/*.EC' >/dev/null 2>&1 || true
 
   "$ZIPALIGN" -f -p 4 "$unsigned" "$aligned"
-  echo "Signing $name for minSdk 32"
+  echo "Signing $name for minSdk 32" >&2
   "$APKSIGNER" sign --min-sdk-version 32 --v1-signing-enabled false \
     --v2-signing-enabled true --v3-signing-enabled true --v4-signing-enabled false \
     --ks "$SDS_KEYSTORE" --ks-key-alias "$SDS_KEY_ALIAS" \
