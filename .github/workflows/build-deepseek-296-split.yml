@@ -84,9 +84,13 @@ jobs:
           PY
           AAPT="$ANDROID_HOME/build-tools/36.0.0/aapt"
           for apk in "$RUNNER_TEMP/deepseek-296/original"/*.apk; do
-            "$AAPT" dump badging "$apk" | grep -q "package: name='com.deepseek.chat' versionCode='296' versionName='2.7.5'" || {
-              echo "::error::Wrong package/version: $(basename "$apk")"; exit 1;
+            badging="$("$AAPT" dump badging "$apk")"
+            grep -q "package: name='com.deepseek.chat' versionCode='296'" <<<"$badging" || {
+              echo "::error::Wrong package/versionCode: $(basename "$apk")"; exit 1;
             }
+            if [[ "$(basename "$apk")" == "base.apk" ]]; then
+              grep -q "versionName='2.7.5'" <<<"$badging" || { echo "::error::Wrong base versionName"; exit 1; }
+            fi
           done
           "$AAPT" dump badging "$RUNNER_TEMP/deepseek-296/original/base.apk"
       - name: Run approval-first native regression tests
