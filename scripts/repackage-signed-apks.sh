@@ -58,6 +58,23 @@ for apk in "$WORK/original"/*.apk; do
     grep -q "versionName='2.7.5'" <<<"$badging" || { echo "wrong base versionName" >&2; exit 1; }
   fi
 done
+read_cert_digest() {
+  local apk="$1"
+  local report
+  report="$("$APKSIGNER" verify --min-sdk-version 32 --print-certs "$apk" 2>&1)"
+  printf '%s\\n' "$report" > "$WORK/signed/$(basename "$apk").cert-report.txt"
+  local digest
+  digest="$(printf '%s\\n' "$report" |
+    sed -nE 's/.*certificate SHA-256 digest:[[:space:]]*([[:xdigit:]: ]+).*/\\1/ip' |
+    head -n 1 | tr -d ' :\\r\\n' | tr '[:upper:]' '[:lower:]')"
+  [[ "$digest" =~ ^[0-9a-f]{64}$ ]] || {
+    echo "could not parse SHA-256 signer certificate for $(basename "$apk")" >&2
+    printf '%s\\n' "$report" >&2
+    return 1
+  }
+  printf '%s\\n' "$digest"
+}
+
 sign_one() {
   local input="$1" name="$2"
   local unsigned="$WORK/signed/$name.unsigned.apk"
@@ -65,16 +82,12 @@ sign_one() {
   local output="$WORK/signed/$name"
 
   # Remove a prior JAR/v1 signature block (Morphe may have signed the patched
-  # base already). Leaving stale META-INF signature records makes apksigner's
-  # verifier report a missing MANIFEST.MF after the new signature is written.
+  # base already). The final API-32+ package uses APK Signature Scheme v2/v3.
   cp "$input" "$unsigned"
   zip -q -d "$unsigned" 'META-INF/MANIFEST.MF' 'META-INF/*.SF' \
     'META-INF/*.RSA' 'META-INF/*.DSA' 'META-INF/*.EC' >/dev/null 2>&1 || true
 
   "$ZIPALIGN" -f -p 4 "$unsigned" "$aligned"
-  # The inspected 296 base target requires Android API 32. Some configuration
-  # splits omit uses-sdk in their own manifest; pin the platform range here so
-  # apksigner does not incorrectly attempt a legacy v1 fallback.
   echo "Signing $name for minSdk 32"
   "$APKSIGNER" sign --min-sdk-version 32 --v1-signing-enabled false \
     --v2-signing-enabled true --v3-signing-enabled true --v4-signing-enabled false \
@@ -82,8 +95,7 @@ sign_one() {
     --ks-pass env:SDS_KEYSTORE_PASSWORD --key-pass env:SDS_KEY_PASSWORD \
     --out "$output" "$aligned"
   "$APKSIGNER" verify --min-sdk-version 32 --verbose "$output" >/dev/null
-  "$APKSIGNER" verify --min-sdk-version 32 --print-certs "$output" |
-    awk -F': ' '/Signer #1 certificate SHA-256 digest:/ {print tolower($2); exit}'
+  read_cert_digest "$output"
 }
 sign_one "$PATCHED_BASE" base.apk > "$WORK/signed/base.cert"
 for split in "$WORK/original"/split*.apk; do
@@ -94,7 +106,7 @@ CERT="$(cat "$WORK/signed/base.cert")"
 [[ "$CERT" =~ ^[0-9a-f]{64}$ ]] || { echo "invalid base signer digest" >&2; exit 1; }
 for signed in "$WORK/signed"/*.apk; do
   "$APKSIGNER" verify --min-sdk-version 32 --verbose "$signed" >/dev/null
-  cert="$("$APKSIGNER" verify --min-sdk-version 32 --print-certs "$signed" | awk -F': ' '/Signer #1 certificate SHA-256 digest:/ {print tolower($2); exit}')"
+  cert="$(read_cert_digest "$signed")"
   [[ "$cert" == "$CERT" ]] || { echo "signer mismatch: $(basename "$signed")" >&2; exit 1; }
   badging="$("$AAPT" dump badging "$signed")"
   grep -q "package: name='com.deepseek.chat' versionCode='296'" <<<"$badging"
