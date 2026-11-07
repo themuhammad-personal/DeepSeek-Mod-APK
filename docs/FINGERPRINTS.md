@@ -77,14 +77,31 @@ run that has a pinned source.
 uses the names of that build, so the hook verification of a patched APK is
 correct for the build that was patched.
 
+## The apply proof of the build with the version code 294
+
+The workflow `verify-294-build-patches.yml` takes the base APK out of the
+owner's own copy of the APKM, checks the fingerprint set of that build, applies
+the four patches and verifies the hook call sites in the patched DEX.
+
+| Item | Value |
+|---|---|
+| run | `42358670995` |
+| source APKM SHA-256 | `8c3f9665e81c4c7bb76547f70c4d5e52ccc31d981e66c8121ad9f218b646f1ae` |
+| base APK SHA-256 | `2e898602374ed75f53d8e4c162fa625f5f4e1793b16fbd567f6dd02f6277a709` |
+| patched APK SHA-256 | `496c20b8c5cad4e2280eef41ab2b1e74f51753bc13cb6c43a6d1009034e935be` |
+| patched APK size | 23,191,872 bytes |
+| hooks | `beforePrompt` reads `v8`, the SET observer reads `v3`, the APPEND observer reads `v4` |
+
+Every step of that run succeeded, Morphe reported `success=True` and the
+result JSON lists the four applied patches.
+
 ## What this does not prove
 
-- The fingerprints of the build with the version code 294 were **statically
-  verified** against the dex files of that build. The patches were **not
-  applied** to that build, because no toolchain that can sign an APK of that
-  build is available here, and the build was **not run on a device**.
-- The target of the version code 294 is therefore declared as **experimental**
-  in `DeepSeekCompatibility.kt`, while the target of the version code 293 stays
+- The build with the version code 294 is **patch-applied**, but it was **not
+  run on a device**. Nothing of this proves that the app starts, that the login
+  works or that the observer sees the stream on that build.
+- The target of the version code 294 therefore stays **experimental** in
+  `DeepSeekCompatibility.kt`, while the target of the version code 293 stays
   the stable one.
 - Nothing of this changes the official login, the session, the anti-fraud
   checks or the signature of the app.

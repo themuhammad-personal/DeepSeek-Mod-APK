@@ -66,8 +66,10 @@ what the next blocker is.
 
 | Claim | Label | Evidence |
 |---|---|---|
-| The patches apply to the inspected target and Morphe reports success | **patch-applied** | CI run `42354635483` applied the **current** patch set to the pinned target: every step of the workflow succeeded, the four patches were applied and Morphe reported `success=True` |
-| The hook call sites read the register that the original code just wrote | **patch-applied** | the DEX comparison of the verifier, `OK beforePrompt receives the prompt register v8`, `OK observeResponse receives the accumulated content register v4` |
+| The patches apply to the inspected target and Morphe reports success | **patch-applied** | CI run `42358670810` applied the **current** patch set to the pinned target: every step of the workflow succeeded, the four patches were applied and Morphe reported `success=True` |
+| The patches apply to the build with the version code 294 | **patch-applied** | CI run `42358670995` applied the **current** patch set to the base APK of that build: every step succeeded, the four patches were applied, the result JSON reports `success=True` and the hook call sites were verified in the patched DEX |
+| The fingerprint set of every inspected build is bound to its own build | **static-verified** and **patch-applied** | `scripts/verify_fingerprints.py` proves that the set of the build 293 does not resolve in the build 294 and the other way round, and both workflows ran that check before they applied the patches |
+| The hook call sites read the register that the original code just wrote | **patch-applied** | the DEX comparison of the verifier, `OK beforePrompt receives the prompt register v8`, `OK observeResponse receives the accumulated content register v4`, and the same registers in the build with the version code 294 |
 | The guarded prompt is written back into the request | **patch-applied** | the verifier fails when it is not |
 | The observer runs after the update of the content | **patch-applied** | the verifier fails when it does not |
 | The extension is really in the bundle of the patched APK | **patch-applied** | 38 classes are looked up in the patched DEX |
@@ -79,27 +81,39 @@ what the next blocker is.
 | The PRoot runtime runs | **NOT VERIFIED** | the binaries are not bundled, so the studio refuses to run |
 | The tool result reaches the chat | **NOT VERIFIED** | the seam is proved in the DEX, the rendering is not |
 
-### The artefacts of the earlier full apply verification (run `42349185806`)
+### The artefacts of the full apply verification of the current patch set
 
-The newer run `42354635483` repeated the whole chain with the current patches
-and every step succeeded. Its summary carries the hashes of the rebuilt target
-and of the patched APK, but the summary of a finished run cannot be read back
-through the API, so the hashes below are the ones of the earlier run with the
-same source and the same pipeline.
+Run `42358670810` repeated the whole chain with the current patches against the
+pinned target and every step succeeded. Its step summary carries the hashes of
+the rebuilt target and of the patched APK.
 
 | Item | Value |
 |---|---|
 | rebuilt target SHA-256 | `b4bd2251637879b3c192ad37ff2905910c7c97da192c4bc56fd782d93b01b930` |
-| patched APK SHA-256 | `69b01e2fb2d16184584218c924823de993a415852bb6ece2fc6a8c3098ca8278` |
-| patched APK size | 31,253,709 bytes |
+| patched APK SHA-256 | `c9fdf1ad7f1d43ea1164e99fa7cc90c2915494687a3645bf0f1fb7f2ac1dfce8` |
+| patched APK size | 31,278,285 bytes |
 | source bundle SHA-256 | `b0ec418ec9b8a273479acd8fed73acefbdbddd34162684c50e1737abb70d74de` |
-| Morphe patch bundle artefact | `sha256:ceac6957e34065d5c8de4bdeea507d07c87bef69b9542bcb8cc73f810aab43dd` |
+| Morphe patch bundle artefact of the earlier run | `sha256:ceac6957e34065d5c8de4bdeea507d07c87bef69b9542bcb8cc73f810aab43dd` |
+
+### The artefacts of the full apply verification of the build with the version code 294
+
+Run `42358670995` took the base APK out of the copy of the owner, checked the
+fingerprint set of that build, applied the four patches and verified the hook
+call sites in the patched DEX.
+
+| Item | Value |
+|---|---|
+| source APKM SHA-256 | `8c3f9665e81c4c7bb76547f70c4d5e52ccc31d981e66c8121ad9f218b646f1ae` |
+| base APK SHA-256 | `2e898602374ed75f53d8e4c162fa625f5f4e1793b16fbd567f6dd02f6277a709` |
+| patched APK SHA-256 | `496c20b8c5cad4e2280eef41ab2b1e74f51753bc13cb6c43a6d1009034e935be` |
+| patched APK size | 23,191,872 bytes |
 
 The runs without a pointer report `NOT VERIFIED`, because `.github/pinned-source.env`
-was deleted after the verification. The workflow skips every step and says so;
-it never reports a pass it did not perform. The pointer was restored for the
-run `42354635483` and removed again right after it, and the link share of the
-file in the Drive of the owner was revoked again.
+and `.github/pinned-294-source.env` were deleted after the verification. The
+workflows skip every step and say so; they never report a pass they did not
+perform. The pointers were restored for the runs `42358670810` and
+`42358670995` and removed again right after them, and the link shares of the
+files in the Drive of the owner were revoked again.
 
 ## 4. The next blocker
 

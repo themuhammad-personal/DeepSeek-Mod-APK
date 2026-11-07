@@ -191,11 +191,11 @@ pre-existing set of the target.
 ## 5. Reproducing the run
 
 ```bash
-gh run view 42349185806 --repo themuhammad-personal/DeepSeek-Mod-APK
+gh run view 42358670810 --repo themuhammad-personal/DeepSeek-Mod-APK
 ```
 
-The newest full verification run is `42349185806`. It proves the four patches
-that exist today:
+The newest full verification run against the pinned target is `42358670810`. It
+proves the four patches that exist today:
 
 ```
 applied=DeepSeek 2.7.4 compatibility check, Native Agent hook points (experimental),
@@ -219,22 +219,43 @@ and the artefacts of that run:
 | Item | Value |
 |---|---|
 | rebuilt target SHA-256 | `b4bd2251637879b3c192ad37ff2905910c7c97da192c4bc56fd782d93b01b930` |
-| patched APK SHA-256 | `69b01e2fb2d16184584218c924823de993a415852bb6ece2fc6a8c3098ca8278` |
-| patched APK size | 31,253,709 bytes |
+| patched APK SHA-256 | `c9fdf1ad7f1d43ea1164e99fa7cc90c2915494687a3645bf0f1fb7f2ac1dfce8` |
+| patched APK size | 31,278,285 bytes |
 | source bundle SHA-256 | `b0ec418ec9b8a273479acd8fed73acefbdbddd34162684c50e1737abb70d74de` |
 
 The earlier P0 run `42336409045` proved the first three patches before the
 chat entry and the handback existed.
 
-The run `42354635483` repeated the whole chain with the **current** patch set
+The run `42358670810` repeated the whole chain with the **current** patch set
 (the console that is not exported, the runtime that starts with the chat
-screen, the chat entry, the handback and the stricter verification). Every step
-of the workflow succeeded: the pinned source was fetched and checked, the
-target was rebuilt, the four patches were applied, the patched APK passed the
-package, version, signature, alignment and manifest checks and the hook call
-sites were proved in the patched DEX.
+screen, the chat entry, the handback, the fingerprint set of the build and the
+stricter verification). Every step of the workflow succeeded: the pinned source
+was fetched and checked, the target was rebuilt, the four patches were applied,
+the patched APK passed the package, version, signature, alignment and manifest
+checks and the hook call sites were proved in the patched DEX.
 
-The run needs the hash-pinned source location, which is read from `.github/pinned-source.env`.
+### The second inspected build
+
+The build with the version code 294 has its own fingerprint set, because it is
+obfuscated on its own. The workflow `verify-294-build-patches.yml` took the
+base APK out of the copy of the owner and repeated the same chain against it:
+
+```bash
+gh run view 42358670995 --repo themuhammad-personal/DeepSeek-Mod-APK
+```
+
+| Item | Value |
+|---|---|
+| source APKM SHA-256 | `8c3f9665e81c4c7bb76547f70c4d5e52ccc31d981e66c8121ad9f218b646f1ae` |
+| base APK SHA-256 | `2e898602374ed75f53d8e4c162fa625f5f4e1793b16fbd567f6dd02f6277a709` |
+| patched APK SHA-256 | `496c20b8c5cad4e2280eef41ab2b1e74f51753bc13cb6c43a6d1009034e935be` |
+| patched APK size | 23,191,872 bytes |
+
+Every step of that run succeeded as well, the four patches were applied and the
+hook call sites were proved in the patched DEX with the names of that build.
+
+The runs need the hash-pinned source location, which is read from
+`.github/pinned-source.env` and from `.github/pinned-294-source.env`.
 That file points at the owner's own Drive copy and is **not part of the project**: it is removed
 after the verification, and the Drive link share is revoked. Without it the workflow resolves
 `has_source=false`, skips every verification step and says so in the run summary — it never
@@ -248,8 +269,10 @@ reports a pass it did not perform.
    checks that need it: install the patched APK, log in with the official flow, send a chat
    message, and record the observer events (frequency, full accumulated content, duplicates,
    thread, lifecycle, UI stalls) without logging anything sensitive.
-2. **The 2.7.4/294 build is not supported.** A separate fingerprint set is required for the
-   PairIP build; the 2.7.4 fingerprints must never be applied to it.
+2. **The 2.7.4/294 build is not device proven.** It now has its own fingerprint set and the
+   patches were applied to its base APK in the run `42358670995`, so it is *patch-applied*. It
+   was not started on a device, so the target stays experimental. The fingerprint sets do not
+   mix: the set of the build 293 does not resolve in the build 294 and the other way round.
 3. **The console entry point** is now also a plain floating view inside the official chat
    screen, inserted by the patch `Super DeepSeek native Agent chat entry`. The call site is
    proved in the patched DEX, but the placement and the touch behaviour on a device are not.

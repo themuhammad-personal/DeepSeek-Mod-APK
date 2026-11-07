@@ -32,8 +32,9 @@ The APK and decoded third-party sources are not committed. Keep local inputs in 
 This is the same app version, but a different build: it is obfuscated on its
 own, so every class name of the build with the version code 293 changed. It
 therefore has its own fingerprint set, which is described in
-[FINGERPRINTS.md](FINGERPRINTS.md). The patches were not applied to it and it
-was not run on a device, so its target is declared as experimental.
+[FINGERPRINTS.md](FINGERPRINTS.md). The patches were applied to the base APK of
+this build in the run `42358670995` and every step of that run succeeded, but
+the build was not run on a device, so its target is declared as experimental.
 
 ## Statically identified method seams
 

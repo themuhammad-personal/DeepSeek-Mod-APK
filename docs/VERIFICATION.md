@@ -1,6 +1,6 @@
 # Build and patch verification
 
-Two independent CI workflows are used.
+Three independent CI workflows are used.
 
 1. **Build Morphe patch bundle** runs on every push to the working branch. It runs the Java
    agent-core regression tests and builds the MPP/MPE bundle.
@@ -8,6 +8,10 @@ Two independent CI workflows are used.
    the patches, the extension, the verification scripts or the workflow. It resolves a
    hash-pinned source, rebuilds a content-equivalent target APK, applies the patches with the
    pinned Morphe Desktop CLI, and then verifies the resulting APK.
+3. **Verify Morphe patches against the DeepSeek build with the version code 294** does the same
+   for the second inspected build. It takes the base APK out of the APKM of the owner, checks
+   the fingerprint set of that build, applies the patches and verifies the hook call sites with
+   the names of that build.
 
 The detailed result of the apply verification is in **[P0-VERIFICATION.md](P0-VERIFICATION.md)**.
 
@@ -19,10 +23,11 @@ Supply a stable HTTPS source for the exact sample and its known SHA-256; **do no
 pinned hash to match an uninspected version**. The official 2.7.4 APK is not redistributable
 and is never committed to this repository.
 
-The source location is read from `.github/pinned-source.env`. That file points at the owner's own
-copy, is not part of the project, and is removed once the verification has run. Without it the
-workflow resolves `has_source=false`, skips every verification step and states in the run
-summary that nothing was verified.
+The source location is read from `.github/pinned-source.env` and from
+`.github/pinned-294-source.env`. Those files point at the owner's own copies, are not part of
+the project, and are removed once the verification has run. Without them the workflows resolve
+`has_source=false`, skip every verification step and state in the run summary that nothing was
+verified.
 
 The original and patched APKs are temporary CI files and are deleted at job completion. They are
 not uploaded as release assets and not committed. This is static/build-time integration
