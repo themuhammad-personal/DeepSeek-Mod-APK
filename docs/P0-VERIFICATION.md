@@ -48,6 +48,30 @@ code, so the apply is performed against the reconstructed 293 target only.
 
 ---
 
+## 1.3 The newest official build and the build of the patched APK
+
+The official download address serves DeepSeek 2.7.5 with the version code 295
+now. The workflow **Build the patched DeepSeek APK** builds the patched app of
+exactly that file and keeps it as an artifact of the run.
+
+| Property | Value | Evidence |
+| --- | --- | --- |
+| Package | `com.deepseek.chat` | `aapt dump badging` in the run `42364324070` |
+| Version / versionCode | `2.7.5` / `295` | `aapt dump badging` |
+| minSdk / targetSdk | 24 / 36 | `aapt dump badging` |
+| Official APK SHA-256 | `ddc52ef868b991fd33e634de834a3e2c022b0cd7ff9e854f4f141996aaeadb70` (22,210,268 bytes) | the run `42363137135` of the workflow **Check the newest official DeepSeek release** |
+| Patched APK | the artifact `deepseek-patched-apk` of the run `42364324070` (21,329,027 bytes) | the upload step of that run |
+| Fingerprint set | `DeepSeekFingerprints295.kt` | `scripts/verify_fingerprints.py` in the run |
+| Patches applied | the four patches of this project | the patch result JSON of the run |
+| The login is untouched | passed | `scripts/verify_login_untouched.py` in the run |
+| The app stays native | passed | `scripts/verify_native_only.py` in the run |
+
+The names of the seams of that build were found by the twin search of
+`scripts/find_build_twin.py`, which reproduces the fingerprint sets of the
+builds with the version codes 293, 294 and 296 exactly.
+
+---
+
 ## 2. What the CI run does
 
 `.github/workflows/verify-pinned-apk-patches.yml`, run `42336409045`, commit `e524487`:

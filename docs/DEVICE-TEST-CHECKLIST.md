@@ -22,6 +22,21 @@ docs/P0-VERIFICATION.md.
 
 ## 1. Build
 
+### 1.1 The build of GitHub Actions
+
+The workflow **Build the patched DeepSeek APK** builds the patched app on
+every push that changes the patches, the extension or a harness. Open the run
+of the commit that is to be tested, download the artifact
+**deepseek-patched-apk** at the bottom of the run page and check its checksum
+against the value that the run reports.
+
+The artifact exists for seven days. It is not a release and it is not
+committed, because the payload of the official app may not be redistributed.
+The signature of the artifact is a throwaway key of the build, so the app
+cannot replace an official installation in place.
+
+### 1.2 The build on a own machine
+
 ```bash
 bash scripts/build-patched-apk.sh --mpp <bundle.mpp> --source-file <extraction.zip>
 ```
