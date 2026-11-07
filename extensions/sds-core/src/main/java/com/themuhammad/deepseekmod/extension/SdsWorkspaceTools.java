@@ -60,7 +60,7 @@ public final class SdsWorkspaceTools {
         public boolean requiresNetwork() { return false; }
 
         @Override
-        public SdsToolResult execute(SdsToolContext context, SdsToolCall call) {
+        public SdsToolResult execute(SdsToolContext context, SdsToolCall call) throws Exception {
             SdsToolArguments arguments = SdsToolArguments.parse(call.getArgumentsJson());
             arguments.requireOnly("path", "depth");
             String path = arguments.getString("path", ".");

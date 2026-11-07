@@ -35,7 +35,10 @@ jobs:
           bash scripts/test-agent-core.sh > "$RUNNER_TEMP/agent-core.log" 2>&1 || status=$?
           cat "$RUNNER_TEMP/agent-core.log"
           if [[ "$status" -ne 0 ]]; then
-            tail -20 "$RUNNER_TEMP/agent-core.log" | while IFS= read -r line; do
+            {
+              grep -E "error:|AssertionError|Exception" "$RUNNER_TEMP/agent-core.log" || true
+              tail -6 "$RUNNER_TEMP/agent-core.log"
+            } | head -9 | while IFS= read -r line; do
               printf '::error title=Native core test failed::%s\n' "${line//$'\r'/}"
             done
           fi
