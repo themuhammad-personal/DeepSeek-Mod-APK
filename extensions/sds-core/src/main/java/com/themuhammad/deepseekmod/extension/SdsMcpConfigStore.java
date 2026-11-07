@@ -49,7 +49,8 @@ public final class SdsMcpConfigStore {
         if (servers.size() >= MAX_SERVERS) {
             throw new IllegalStateException("the server limit is reached");
         }
-        Server server = new Server(normalizedName, normalizeUrl(url), token == null ? "" : token.trim());
+        Server server = new Server(normalizedName, normalizeUrl(url),
+                token == null ? "" : token.trim(), false);
         servers.put(normalizedName, server);
         save();
         return server;
