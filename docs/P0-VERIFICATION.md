@@ -65,6 +65,11 @@ exactly that file and keeps it as an artifact of the run.
 | Patches applied | the four patches of this project | the patch result JSON of the run |
 | The login is untouched | passed | `scripts/verify_login_untouched.py` in the run |
 | The app stays native | passed | `scripts/verify_native_only.py` in the run |
+| The only file that the patches add | `classes4.dex` | the report of the run |
+
+The checksum of the patched APK is different in every run, because the Morphe
+CLI signs every build with a new throwaway key. The checksum of the run that
+is named above belongs to that run.
 
 The names of the seams of that build were found by the twin search of
 `scripts/find_build_twin.py`, which reproduces the fingerprint sets of the
