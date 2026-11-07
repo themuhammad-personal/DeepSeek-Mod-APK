@@ -136,6 +136,7 @@ public final class SdsAgentConsoleActivity extends Activity {
                 if (!polling) return;
                 refreshProposals();
                 refreshSession();
+                refreshDiagnostics();
                 handler.postDelayed(this, 1000L);
             }
         });
@@ -1650,7 +1651,8 @@ public final class SdsAgentConsoleActivity extends Activity {
 
     private void refreshDiagnostics() {
         if (diagnosticsStatus == null) return;
-        diagnosticsStatus.setText(SdsAgentHooks.getDiagnostics().summary());
+        diagnosticsStatus.setText(SdsAgentHooks.getDiagnostics().summary()
+                + "\\n" + SdsAgentHooks.promptHookSummary());
     }
 
     private void refreshTimeline() {
