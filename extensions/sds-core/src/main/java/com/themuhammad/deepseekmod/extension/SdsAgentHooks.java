@@ -6,6 +6,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Narrow bridge for the inspected DeepSeek 2.7.4 prompt serializer and mutable
@@ -22,6 +23,8 @@ public final class SdsAgentHooks {
             + "they are not executed automatically. Never claim that a tool ran unless its result is returned.\n";
 
     private static volatile boolean enabled;
+    private static final AtomicLong PROMPT_HOOK_CALLS = new AtomicLong();
+    private static final AtomicLong PROMPT_HOOK_FAILURES = new AtomicLong();
     private static final ArrayDeque<SdsToolCall> PENDING = new ArrayDeque<>();
     private static final Set<String> SEEN_IDS = new HashSet<>();
 
@@ -35,9 +38,24 @@ public final class SdsAgentHooks {
      * that on. Nothing else about the prompt is changed.
      */
     public static String beforePrompt(String prompt) {
+        PROMPT_HOOK_CALLS.incrementAndGet();
         if (!enabled || prompt == null) return prompt;
-        String expanded = SdsSlashCommands.expand(prompt);
-        return expanded + TOOL_GUIDANCE + SdsRuntimeRegistry.memoryPromptBlock();
+        try {
+            String expanded = SdsSlashCommands.expand(prompt);
+            if (expanded == null) return prompt;
+            String memory = SdsRuntimeRegistry.memoryPromptBlock();
+            return expanded + TOOL_GUIDANCE + (memory == null ? "" : memory);
+        } catch (Throwable ignored) {
+            // Fail open: a native Agent feature must never block official chat requests.
+            PROMPT_HOOK_FAILURES.incrementAndGet();
+            return prompt;
+        }
+    }
+
+    /** Request-hook counters help distinguish a local hook failure from a server/network failure. */
+    public static String promptHookSummary() {
+        return "request hook calls " + PROMPT_HOOK_CALLS.get()
+                + " | fail-open " + PROMPT_HOOK_FAILURES.get();
     }
 
     /**
@@ -50,18 +68,26 @@ public final class SdsAgentHooks {
      */
     public static void observeResponse(String completeContent) {
         if (completeContent == null) return;
-        SdsObserverDiagnostics.get().onResponse(completeContent);
+        try {
+            SdsObserverDiagnostics.get().onResponse(completeContent);
+        } catch (Throwable ignored) {
+            // Diagnostics must never interrupt the official response stream.
+        }
         if (!enabled) return;
-        for (SdsToolCall call : SdsToolCallParser.parse(completeContent)) {
-            synchronized (PENDING) {
-                if (!enabled || !SEEN_IDS.add(call.getId())) continue;
-                while (PENDING.size() >= MAX_PENDING_CALLS) PENDING.removeFirst();
-                PENDING.addLast(call);
-                if (SEEN_IDS.size() > MAX_SEEN_IDS) {
-                    SEEN_IDS.clear();
-                    for (SdsToolCall pending : PENDING) SEEN_IDS.add(pending.getId());
+        try {
+            for (SdsToolCall call : SdsToolCallParser.parse(completeContent)) {
+                synchronized (PENDING) {
+                    if (!enabled || !SEEN_IDS.add(call.getId())) continue;
+                    while (PENDING.size() >= MAX_PENDING_CALLS) PENDING.removeFirst();
+                    PENDING.addLast(call);
+                    if (SEEN_IDS.size() > MAX_SEEN_IDS) {
+                        SEEN_IDS.clear();
+                        for (SdsToolCall pending : PENDING) SEEN_IDS.add(pending.getId());
+                    }
                 }
             }
+        } catch (Throwable ignored) {
+            // Parsing an optional Agent proposal must never interrupt chat rendering.
         }
     }
 
@@ -76,8 +102,13 @@ public final class SdsAgentHooks {
      * @return the content that the app has to store
      */
     public static String observeResponseAppend(String completeContent) {
-        observeResponse(completeContent);
-        return SdsToolResultHandoff.applyTo(completeContent);
+        try {
+            observeResponse(completeContent);
+            return SdsToolResultHandoff.applyTo(completeContent);
+        } catch (Throwable ignored) {
+            // Fail open: always return the original response content to DeepSeek.
+            return completeContent;
+        }
     }
 
     /** The observer metrics of this process. */
