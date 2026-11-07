@@ -241,10 +241,14 @@ def describe(method: dict, shapes: dict[str, set[str]], holder: str | None = Non
         "promptFieldType": None,
         "promptWriterClass": None,
         "promptWriterName": None,
+        "promptWriterDescriptor": None,
+        "promptDescriptorType": None,
     }
     string_reads: dict[int, tuple[str, str, str]] = {}
     field_types: list[str] = []
     for index, (name, output) in enumerate(method["instructions"]):
+        if name.startswith("sget") and "->descriptor " in output:
+            result["promptDescriptorType"] = output.rsplit(" ", 1)[-1]
         if name.startswith("iget") or name.startswith("iput"):
             hit = IGET.search(f"{name} {output}")
             if hit is None:
@@ -263,6 +267,9 @@ def describe(method: dict, shapes: dict[str, set[str]], holder: str | None = Non
         if len(arguments) == 3 and arguments[-1] == "Ljava/lang/String;":
             result["promptWriterClass"] = callee
             result["promptWriterName"] = hit.group("name")
+            result["promptWriterDescriptor"] = (
+                "(" + "".join(arguments) + ")V"
+            )
             prompt = string_reads.get(index - 1)
             # The prompt of the request is written with the key 2. The
             # instruction in front of the field read is the key.
@@ -363,7 +370,12 @@ def main() -> int:
             if details.get("promptFieldClass"):
                 extra.append(f"prompt field {details['promptFieldClass']}->{details['promptFieldName']}")
             if details.get("promptWriterClass"):
-                extra.append(f"writer {details['promptWriterClass']}->{details['promptWriterName']}")
+                extra.append(
+                    f"writer {details['promptWriterClass']}->{details['promptWriterName']}"
+                    f"{details.get('promptWriterDescriptor') or ''}"
+                )
+            if details.get("promptDescriptorType"):
+                extra.append(f"descriptor type {details['promptDescriptorType']}")
             if details.get("contentHolderClass"):
                 extra.append(f"holder {details['contentHolderClass']}")
             if details.get("contentHolderSet"):

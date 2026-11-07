@@ -1,3 +1,11 @@
+/*
+ * This patch follows the structure of the Morphe patch template:
+ * https://github.com/MorpheApp/morphe-patches-template
+ *
+ * The Morphe patcher is used under its own licence. This project is not a
+ * part of the Morphe project and does not use its name.
+ */
+
 package com.themuhammad.deepseekmod.patches
 
 import app.morphe.patcher.patch.resourceXml
