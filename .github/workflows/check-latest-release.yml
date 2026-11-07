@@ -124,12 +124,9 @@ jobs:
           cat "$SUMMARY" >> "$GITHUB_STEP_SUMMARY" || true
           cat "$SUMMARY" || true
           {
-            cat "$WORK/identity.txt" 2>/dev/null || true
-            cat "$WORK/package.txt" 2>/dev/null || true
-            grep -E "version code of the target|fingerprint set" \
-              "$RUNNER_TEMP/latest-fingerprints.log" 2>/dev/null || true
-            cat "$RUNNER_TEMP/latest-twins.log" 2>/dev/null || true
-          } | head -9 | while IFS= read -r line; do
+            echo "official APK SHA-256: $(sha256sum "$WORK/deepseek.apk" 2>/dev/null | awk '{print $1}' || echo unavailable)"
+            grep -E "^(version code|version name|min sdk|target sdk):" "$WORK/package.txt" 2>/dev/null || true
+          } | head -6 | while IFS= read -r line; do
             [[ -n "$line" ]] || continue
             printf '::warning title=The newest official DeepSeek release::%s\n' "${line//$'\r'/}"
           done
