@@ -1652,7 +1652,7 @@ public final class SdsAgentConsoleActivity extends Activity {
     private void refreshDiagnostics() {
         if (diagnosticsStatus == null) return;
         diagnosticsStatus.setText(SdsAgentHooks.getDiagnostics().summary()
-                + "\\n" + SdsAgentHooks.promptHookSummary());
+                + "\n" + SdsAgentHooks.promptHookSummary());
     }
 
     private void refreshTimeline() {
