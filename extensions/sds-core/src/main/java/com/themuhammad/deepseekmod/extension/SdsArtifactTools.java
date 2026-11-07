@@ -54,8 +54,8 @@ public final class SdsArtifactTools {
                 String language = arguments.getString("language", "text");
                 String content = arguments.getString("content", "");
                 SdsArtifactStore.Artifact artifact = store.create(title, language, content);
-                return new SdsToolResult(SdsToolResult.Status.SUCCESS, artifact.getId(),
-                        "stored the artifact " + artifact.getId() + " (" + artifact.getTitle() + ")");
+                return new SdsToolResult(SdsToolResult.Status.SUCCESS,
+                        "stored the artifact " + artifact.getId() + " (" + artifact.getTitle() + ")", "");
             } catch (IllegalArgumentException | IllegalStateException refused) {
                 return new SdsToolResult(SdsToolResult.Status.FAILED, "",
                         String.valueOf(refused.getMessage()));
@@ -89,8 +89,8 @@ public final class SdsArtifactTools {
                 }
                 SdsToolArguments.parse(call.getArgumentsJson()).requireOnly();
                 String block = store.asPromptBlock(8 * 1024);
-                return new SdsToolResult(SdsToolResult.Status.SUCCESS, "",
-                        block.isEmpty() ? "there are no artifacts" : block);
+                return new SdsToolResult(SdsToolResult.Status.SUCCESS,
+                        block.isEmpty() ? "there are no artifacts" : block, "");
             } catch (IllegalArgumentException refused) {
                 return new SdsToolResult(SdsToolResult.Status.FAILED, "",
                         "the arguments did not match the schema");
@@ -129,7 +129,7 @@ public final class SdsArtifactTools {
                 if (artifact == null) {
                     return new SdsToolResult(SdsToolResult.Status.FAILED, "", "the artifact does not exist");
                 }
-                return new SdsToolResult(SdsToolResult.Status.SUCCESS, artifact.getId(), artifact.getContent());
+                return new SdsToolResult(SdsToolResult.Status.SUCCESS, artifact.getContent(), "");
             } catch (IllegalArgumentException refused) {
                 return new SdsToolResult(SdsToolResult.Status.FAILED, "",
                         "the arguments did not match the schema");
