@@ -2,6 +2,17 @@ name: Build DeepSeek 2.7.5 (296) from the owner's single Drive APK
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - "fix/296-chat-send-fail-open"
+    paths:
+      - ".github/workflows/build-deepseek-296-single-apk.yml"
+      - "patches/**"
+      - "extensions/**"
+      - "scripts/verify_fingerprints.py"
+      - "scripts/verify_patched_hooks.py"
+      - "scripts/verify_login_untouched.py"
+      - "scripts/verify_native_only.py"
 permissions:
   contents: read
   packages: read
@@ -13,6 +24,7 @@ concurrency:
 jobs:
   build:
     name: Download the exact Drive APK, patch and verify it
+    if: ${{ vars.SDS_296_SIGNING_READY == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 75
     steps:
