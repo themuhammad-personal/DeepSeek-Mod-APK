@@ -33,16 +33,21 @@ Returning only the patched `base.apk` would omit the ARM64 native-library and xh
 
 The original Play signing certificate cannot be preserved after modifying the app. All APKs in the output set receive the same owner-controlled signature.
 
-## Run the GitHub Actions workflow
+## Configure the source and start the GitHub Actions build
 
-Workflow:
-https://github.com/themuhammad-personal/DeepSeek-Mod-APK/actions/workflows/build-deepseek-296-split.yml
+The workflow starts on a push to `final/2.7.5-296-split-apk`. The uploaded chat attachment is not directly accessible to GitHub-hosted runners, so the exact same `.apks` archive must be placed at an HTTPS URL that allows direct download.
 
-Select branch `final/2.7.5-296-split-apk`, then **Run workflow**.
+1. Upload `DeepSeek_2.7.5.apks` to an owner-controlled host such as Google Drive.
+2. Set its sharing access to **Anyone with the link**.
+3. Use a direct-download URL. For Google Drive, use the file ID in `https://drive.google.com/uc?export=download&id=FILE_ID`.
+4. In GitHub open **Settings → Secrets and variables → Actions → Variables → New repository variable**.
+5. Create the variable `SDS_296_SOURCE_URL` and set it to the direct-download URL.
 
-The `source_sha256` field is prefilled with the exact archive hash above. The `source_url` field needs a direct HTTPS download link to the same `.apks` file. The uploaded chat attachment itself is not directly accessible to GitHub-hosted runners. Put the same file at an owner-controlled HTTPS location that permits direct unauthenticated download, then paste that direct-download URL into the workflow input.
+The expected outer SHA-256 is pinned inside the workflow:
+`02e6dafdb37fb2be754d4dfd428d2cb9767a610f4de1fa30bce21f11dc14cd8c`.
+The build also checks all three inner APK hashes. A changed archive or split APK is rejected.
 
-Do not change the hash unless the source file changes. A changed base or split is rejected by the inner hash checks.
+The build job is intentionally skipped while `SDS_296_SOURCE_URL` is absent. After you save the variable, tell the maintainer that it is ready; a small commit to this branch will trigger the APK build automatically. Do not put a private access token or signing key in the URL.
 
 ## Persistent signing key
 
