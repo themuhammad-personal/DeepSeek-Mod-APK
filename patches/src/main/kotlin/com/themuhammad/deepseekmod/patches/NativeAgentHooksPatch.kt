@@ -41,7 +41,8 @@ private fun Match.InstructionMatch.fieldAccessReference(): FieldReference? =
  * assumed, so a changed build fails loudly instead of observing a wrong string.
  */
 private fun resolveAppendedContentRegister(method: Method): Int {
-    val instructions = method.instructions
+    val instructions = method.implementation?.instructions
+        ?: error("DeepSeek streaming ResponseFragment APPEND method has no implementation.")
     val appendIndex = instructions.indexOfFirst { instruction ->
         val reference = (instruction as? ReferenceInstruction)?.reference
         reference is MethodReference &&
