@@ -239,6 +239,7 @@ public final class SdsAgentConsoleActivity extends Activity {
         Button resetDiagnostics = button("Reset diagnostics");
         resetDiagnostics.setOnClickListener(v -> {
             SdsAgentHooks.getDiagnostics().reset();
+            SdsAgentHooks.resetHookDiagnostics();
             refresh();
         });
         LinearLayout.LayoutParams resetParams = wrapWrap();
