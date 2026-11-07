@@ -257,9 +257,10 @@ public final class SdsAgentConsoleActivity extends Activity {
         includeMemory.setTextColor(TEXT);
         includeMemory.setTextSize(13);
         includeMemory.setChecked(SdsRuntimeRegistry.isIncludeMemoryInPrompt());
-        includeMemory.setOnCheckedChangeListener((button, checked) ->
-                SdsRuntimeRegistry.setIncludeMemoryInPrompt(checked);
-            SdsSettings.setMemoryInPrompt(checked));
+        includeMemory.setOnCheckedChangeListener((button, checked) -> {
+            SdsRuntimeRegistry.setIncludeMemoryInPrompt(checked);
+            SdsSettings.setMemoryInPrompt(checked);
+        });
         LinearLayout.LayoutParams includeMemoryParams = matchWrap();
         includeMemoryParams.topMargin = dp(6);
         memoryCard.addView(includeMemory, includeMemoryParams);
