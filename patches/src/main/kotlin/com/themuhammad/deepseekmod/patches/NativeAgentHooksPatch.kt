@@ -19,7 +19,7 @@ val nativeAgentHooksPatch = patch(
     description = "Hooks the prompt serializer and the actual streaming ResponseFragment SET/APPEND mutations. Tool proposals are collected only and the handback of a tool result is off by default.",
     default = false
 ) {
-    compatibleWith(DEEPSEEK_2_7_4, DEEPSEEK_2_7_4_VERSION_CODE_294)
+    compatibleWith(DEEPSEEK_2_7_4, DEEPSEEK_2_7_4_VERSION_CODE_294, DEEPSEEK_2_7_5_VERSION_CODE_296)
     dependsOn(compatibilityGatePatch)
 
     execute {

@@ -70,6 +70,7 @@ SOURCE_FILES = {
     "shared": "DeepSeekFingerprints.kt",
     "293": "DeepSeekFingerprints293.kt",
     "294": "DeepSeekFingerprints294.kt",
+    "296": "DeepSeekFingerprints296.kt",
 }
 
 OBJECT_PATTERN = re.compile(r"internal object (\w+)\s*:\s*Fingerprint\s*\(")

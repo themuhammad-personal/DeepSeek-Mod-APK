@@ -94,6 +94,20 @@ PROFILES = {
         "append_descriptor": "(Ls46;Ljava/lang/String;)V",
         "content_append": "Leia;->m(",
     },
+    "296": {
+        "prompt_class": "Lf02;",
+        "prompt_method": "b",
+        "prompt_descriptor": "(Lac4;Ljava/lang/Object;)V",
+        "prompt_field": "Lh02;->c",
+        "set_class": "Ly64;",
+        "set_method": "l",
+        "set_descriptor": "(Ljava/lang/String;Lx46;Lzw1;)V",
+        "content_set": "Llia;->j(",
+        "append_class": "Ly64;",
+        "append_method": "m",
+        "append_descriptor": "(Lx46;Ljava/lang/String;)V",
+        "content_append": "Llia;->m(",
+    },
 }
 STRING_BUILDER_TOSTRING = "Ljava/lang/StringBuilder;->toString()"
 

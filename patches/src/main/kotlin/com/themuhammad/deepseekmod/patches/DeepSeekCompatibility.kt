@@ -34,8 +34,8 @@ internal val DEEPSEEK_2_7_4 = Compatibility(
  * set is `DeepSeekFingerprints294.kt`.
  *
  * The target is experimental, because the fingerprints of this build were read
- * out of its dex files but the patches have not been applied to it and they
- * have not been run on a device yet.
+ * out of its dex files and the patches were applied to it in the verification
+ * workflow, but it has not been run on a device yet.
  */
 internal val DEEPSEEK_2_7_4_VERSION_CODE_294 = Compatibility(
     name = "DeepSeek",
@@ -50,6 +50,36 @@ internal val DEEPSEEK_2_7_4_VERSION_CODE_294 = Compatibility(
             minSdk = 29,
             description = "The build with version code 294 has its own fingerprint set. " +
                 "The patches were not applied to it and they were not run on a device yet."
+        )
+    )
+)
+
+/**
+ * The DeepSeek 2.7.5 build with version code 296.
+ *
+ * The newest release that was inspected. It is distributed as a split package,
+ * it needs Android 12L or newer and it is obfuscated on its own, so every
+ * class name of the builds with the version codes 293 and 294 changed. Its
+ * fingerprint set is `DeepSeekFingerprints296.kt`.
+ *
+ * The target is experimental, because the fingerprints of this build were read
+ * out of its dex files and the patches were applied to it in the verification
+ * workflow, but it has not been run on a device yet.
+ */
+internal val DEEPSEEK_2_7_5_VERSION_CODE_296 = Compatibility(
+    name = "DeepSeek",
+    packageName = "com.deepseek.chat",
+    apkFileType = ApkFileType.APK,
+    appIconColor = 0x1E3A5F,
+    targets = listOf(
+        AppTarget(
+            version = "2.7.5",
+            versionCodes = mapOf(SupportedAbi.ARM64_V8A to 296),
+            isExperimental = true,
+            minSdk = 32,
+            description = "The build with version code 296 has its own fingerprint set. " +
+                "The patches were applied to it in the verification workflow, but it was " +
+                "not run on a device yet."
         )
     )
 )

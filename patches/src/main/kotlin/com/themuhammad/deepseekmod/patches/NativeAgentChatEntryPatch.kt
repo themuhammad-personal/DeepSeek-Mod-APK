@@ -19,7 +19,7 @@ val nativeAgentChatEntryPatch = patch(
     description = "Adds a small native entry to the official chat screen that opens the native Agent Console.",
     default = false
 ) {
-    compatibleWith(DEEPSEEK_2_7_4, DEEPSEEK_2_7_4_VERSION_CODE_294)
+    compatibleWith(DEEPSEEK_2_7_4, DEEPSEEK_2_7_4_VERSION_CODE_294, DEEPSEEK_2_7_5_VERSION_CODE_296)
     dependsOn(nativeAgentConsolePatch)
 
     execute {

@@ -13,7 +13,7 @@ val nativeAgentConsolePatch = patch(
     description = "Adds an Android-native screen to enable proposal mode and review or dismiss parsed tool proposals. It is not exported and it is opened from the entry in the chat screen. It does not execute tools.",
     default = false
 ) {
-    compatibleWith(DEEPSEEK_2_7_4, DEEPSEEK_2_7_4_VERSION_CODE_294)
+    compatibleWith(DEEPSEEK_2_7_4, DEEPSEEK_2_7_4_VERSION_CODE_294, DEEPSEEK_2_7_5_VERSION_CODE_296)
     dependsOn(nativeAgentHooksPatch)
 
     execute {
