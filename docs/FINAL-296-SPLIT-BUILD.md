@@ -49,6 +49,24 @@ The build also checks all three inner APK hashes. A changed archive or split APK
 
 The build job is intentionally skipped while `SDS_296_SOURCE_URL` is absent. After you save the variable, tell the maintainer that it is ready; a small commit to this branch will trigger the APK build automatically. Do not put a private access token or signing key in the URL.
 
+## Critical compatibility limit: Google Play Integrity
+
+DeepSeek's "To continue using DeepSeek, get it on Google Play" screen is consistent with the Play Integrity remediation flow. A public Aurora Store report reproduces that exact DeepSeek message; the Aurora maintainer attributed it to the app developer's Play Integrity check:
+https://gitlab.com/AuroraOSS/AuroraStore/-/work_items/1352
+
+Google's official documentation distinguishes:
+- `appLicensingVerdict = UNLICENSED`: the account does not have a Play entitlement, which can happen with a sideloaded copy.
+- `appRecognitionVerdict = UNRECOGNIZED_VERSION`: the app binary or signing certificate is not recognized as the Play-distributed build.
+- The `GET_LICENSED` remediation dialog is specifically intended to direct users to the genuine Play-distributed app when these verdicts occur.
+
+References:
+- https://developer.android.com/google/play/integrity/verdicts
+- https://developer.android.com/google/play/integrity/remediation
+
+This project re-signs the modified base APK and all of its splits with an owner-controlled certificate. That certificate is not DeepSeek's Google Play App Signing certificate. Therefore a successful build, valid APK signatures, and passing static checks do **not** establish that DeepSeek will accept the modified app at runtime. The app may still show the Play Store screen or reject requests.
+
+The project must not disable, forge, spoof, or bypass DeepSeek's Play Integrity, app-licensing, anti-fraud, session, or certificate checks. Do not describe the resulting APK as ready for normal use until DeepSeek provides an authorized testing/distribution path or explicitly recognizes the modified signing identity. A separate companion app that does not modify DeepSeek's package is the safer independent development route.
+
 ## Persistent signing key
 
 To install future builds as updates without uninstalling the current modified app, configure these Actions secrets **before the first installation**:
