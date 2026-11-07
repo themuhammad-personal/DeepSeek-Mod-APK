@@ -68,7 +68,7 @@ and the handback of a result.
 |---|---|
 | Reference source | The reference product reviews the tool calls of the agent; the PoC had no review step at all (`SEAM-ANALYSIS.md` §5 calls the tool turn unconfirmed) |
 | Native implementation | `SdsAgentSession` (state machine `IDLE → COLLECTING → AWAITING_APPROVAL → RUNNING → COMPLETED / DENIED / CANCELLED / FAILED`), `SdsAgentConsoleActivity` (Approve, Deny, Stop) |
-| Patch | `Super DeepSeek native Agent Console` — `NativeAgentConsolePatch.kt` |
+| Patch | `Super DeepSeek native Agent Console` — `NativeAgentConsolePatch.kt` (the Activity is declared with `exported=false` and without a launcher filter) |
 | Status | `static-verified`, `build-verified`, `patch-applied` |
 
 **Why.** The state machine exists so that no code path can reach a tool

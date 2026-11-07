@@ -9,7 +9,7 @@ private const val SDS_AGENT_CONSOLE_ACTIVITY =
 @Suppress("unused")
 val nativeAgentConsolePatch = patch(
     name = "Super DeepSeek native Agent Console",
-    description = "Adds a separate Android-native screen to enable proposal mode and review or dismiss parsed tool proposals. It does not execute tools.",
+    description = "Adds an Android-native screen to enable proposal mode and review or dismiss parsed tool proposals. It is not exported and it is opened from the entry in the chat screen. It does not execute tools.",
     default = false
 ) {
     compatibleWith(DEEPSEEK_2_7_4)
@@ -23,20 +23,16 @@ val nativeAgentConsolePatch = patch(
                 it.attribute("android:name") == SDS_AGENT_CONSOLE_ACTIVITY
             }
             if (!alreadyDeclared) {
+                // The console is not exported and it has no launcher entry: only the
+                // app itself may open it, through the entry in the chat screen.
+                // The console shows the memories, the artifacts and the list of the
+                // MCP servers, so it must not be reachable from another app.
                 application.appendChild("activity") {
                     setAttribute("android:name", SDS_AGENT_CONSOLE_ACTIVITY)
                     setAttribute("android:label", "Super DeepSeek Agent")
-                    setAttribute("android:exported", "true")
+                    setAttribute("android:exported", "false")
                     setAttribute("android:launchMode", "singleTop")
                     setAttribute("android:theme", "@android:style/Theme.Material.NoActionBar")
-                    appendChild("intent-filter") {
-                        appendChild("action") {
-                            setAttribute("android:name", "android.intent.action.MAIN")
-                        }
-                        appendChild("category") {
-                            setAttribute("android:name", "android.intent.category.LAUNCHER")
-                        }
-                    }
                 }
             }
         }

@@ -99,7 +99,7 @@ content.
 
 ### Console (build-verified, not device-runtime-verified)
 
-- `SdsAgentConsoleActivity`: a separate native launcher Activity that shows the session state, the approve, deny and stop actions, the activity timeline, the tool allow-list with the schema of every tool, the observer diagnostics, the proposal queue, the memories, the projects, the slash commands, the artifacts, the Generative UI surface and the Linux Studio.
+- `SdsAgentConsoleActivity`: a native Activity that is not exported and that is opened from the entry in the chat screen; it shows the session state, the approve, deny and stop actions, the activity timeline, the tool allow-list with the schema of every tool, the observer diagnostics, the proposal queue, the memories, the projects, the slash commands, the artifacts, the Generative UI surface and the Linux Studio.
 - `SdsChatEntry`: the entry that the chat entry patch puts into the chat screen. It is a plain Android view on the window of the activity, it opens the console and it removes itself again when anything goes wrong.
 
 ## Streaming trace

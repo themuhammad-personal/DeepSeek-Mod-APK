@@ -38,8 +38,10 @@ public final class SdsAgentConsoleActivity extends Activity {
     private static final int WARN = Color.rgb(255, 210, 130);
 
     private final SdsAgentSession session = new SdsAgentSession();
+    private final android.os.Handler handler = new android.os.Handler(android.os.Looper.getMainLooper());
     private SdsToolRegistry registry;
     private SdsToolExecutor executor;
+    private boolean polling;
 
     private LinearLayout proposalList;
     private LinearLayout timelineList;
@@ -92,12 +94,45 @@ public final class SdsAgentConsoleActivity extends Activity {
     protected void onResume() {
         super.onResume();
         if (proposalList != null) refresh();
+        startPolling();
+    }
+
+    @Override
+    protected void onPause() {
+        stopPolling();
+        super.onPause();
     }
 
     @Override
     protected void onDestroy() {
+        stopPolling();
         if (executor != null) executor.shutdown();
         super.onDestroy();
+    }
+
+    /**
+     * Keeps the proposal list and the session state up to date.
+     *
+     * Only the parts that can change on their own are rebuilt, so the screen
+     * does not jump while the user reads it.
+     */
+    private void startPolling() {
+        if (polling) return;
+        polling = true;
+        handler.post(new Runnable() {
+            @Override
+            public void run() {
+                if (!polling) return;
+                refreshProposals();
+                refreshSession();
+                handler.postDelayed(this, 1000L);
+            }
+        });
+    }
+
+    private void stopPolling() {
+        polling = false;
+        handler.removeCallbacksAndMessages(null);
     }
 
     private void buildScreen() {

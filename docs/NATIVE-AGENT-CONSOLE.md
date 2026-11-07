@@ -2,9 +2,10 @@
 
 ## What it is
 
-The Morphe patch named **Super DeepSeek native Agent Console** adds a second
-launcher entry to the inspected DeepSeek 2.7.4 APK. It opens an Android-native
-Activity implemented in the DEX extension. The original DeepSeek launcher
+The Morphe patch named **Super DeepSeek native Agent Console** adds an
+Android-native Activity to the inspected DeepSeek 2.7.4 APK. The Activity is
+implemented in the DEX extension, it is **not exported** and it has no launcher
+entry, so only the app itself can open it. The original DeepSeek launcher
 Activity and the sign-in flow are not replaced.
 
 A second patch, **Super DeepSeek native Agent chat entry**, puts a small

@@ -171,7 +171,7 @@ pre-existing set of the target.
 * the three Morphe patches apply to that target and Morphe reports success;
 * the patched APK keeps the official package name, version, version code and ABI;
 * the patched APK is signed and aligned, and every DEX file disassembles;
-* the original launcher activity is still declared, and the new Agent Console activity is added;
+* the original launcher activity is still declared, and the new Agent Console activity is added, declared as not exported and without a launcher filter;
 * the three hooks read the intended registers, proven against the patched DEX;
 * the patch adds no undefined type reference;
 * the native core test suite (`scripts/test-agent-core.sh`) passes in the same run.

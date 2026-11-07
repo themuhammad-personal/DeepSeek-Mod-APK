@@ -37,7 +37,7 @@ correct callback frequency, threading, Compose rendering or real-device executio
   native Agent chat entry patch apply to that target, and Morphe reports success;
 - the patched APK keeps the official package name, version, version code and ABI, is signed,
   is aligned, and every DEX file disassembles;
-- the original launcher Activity is still declared and the Agent Console Activity is added;
+- the original launcher Activity is still declared and the Agent Console Activity is added, declared as not exported and without a launcher filter;
 - each hook call site reads the register that the original code just wrote, proven against the
   patched DEX rather than assumed;
 - the chat entry call site sits directly in front of the return of `MainActivity.onCreate`, so

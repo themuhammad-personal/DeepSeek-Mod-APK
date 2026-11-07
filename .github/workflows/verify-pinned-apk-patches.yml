@@ -277,7 +277,24 @@ jobs:
           grep -F "package: name='com.deepseek.chat' versionCode='293' versionName='2.7.4'" "$RUNNER_TEMP/deepseek-verify/patched-badging.txt"
           "$APKSIGNER" verify --verbose "$APK"
           "$ZIPALIGN" -c -p 4 "$APK"
-          "$AAPT" dump xmltree "$APK" AndroidManifest.xml | grep -F "com.themuhammad.deepseekmod.extension.SdsAgentConsoleActivity"
+          # The console shows the memories, the artifacts and the MCP servers, so it
+          # must not be reachable from another app.
+          "$AAPT" dump xmltree "$APK" AndroidManifest.xml > "$RUNNER_TEMP/deepseek-verify/patched-manifest.txt"
+          CONSOLE_BLOCK="$RUNNER_TEMP/deepseek-verify/console-activity.txt"
+          grep -F -A 12 "com.themuhammad.deepseekmod.extension.SdsAgentConsoleActivity" \
+            "$RUNNER_TEMP/deepseek-verify/patched-manifest.txt" > "$CONSOLE_BLOCK"
+          if grep -F "android:exported" "$CONSOLE_BLOCK" | grep -qF "0xffffffff"; then
+            echo "::error title=The console must not be exported::The Agent Console Activity is exported, so another app could open it."
+            exit 1
+          fi
+          if ! grep -qF "android:exported" "$CONSOLE_BLOCK"; then
+            echo "::error title=The console must declare its exported state::The Agent Console Activity does not declare android:exported."
+            exit 1
+          fi
+          if grep -qF "android.intent.category.LAUNCHER" "$CONSOLE_BLOCK"; then
+            echo "::error title=The console must not have a launcher entry::The Agent Console Activity has a LAUNCHER filter, so the launcher could open it."
+            exit 1
+          fi
           # The Android SDK disassembler validates the DEX structure of every file.
           rm -rf "$RUNNER_TEMP/deepseek-verify/dex"
           mkdir -p "$RUNNER_TEMP/deepseek-verify/dex"
