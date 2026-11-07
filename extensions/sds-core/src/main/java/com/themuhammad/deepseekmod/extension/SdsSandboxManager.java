@@ -12,6 +12,8 @@ import java.io.File;
 public final class SdsSandboxManager {
     private final File nativeLibraryDirectory;
     private final File filesDirectory;
+    private boolean checksumKnown;
+    private boolean checksumValid;
 
     public SdsSandboxManager(File nativeLibraryDirectory, File filesDirectory) {
         this.nativeLibraryDirectory = nativeLibraryDirectory;
@@ -21,22 +23,58 @@ public final class SdsSandboxManager {
     /** The PRoot launcher, or null when the runtime was not bundled. */
     public File findLauncher() {
         if (nativeLibraryDirectory == null || !nativeLibraryDirectory.isDirectory()) return null;
-        for (String name : SdsSandboxConfig.LAUNCHER_NAMES) {
-            File candidate = new File(nativeLibraryDirectory, name);
-            if (candidate.isFile()) return candidate;
-        }
-        return null;
+        File candidate = new File(nativeLibraryDirectory, SdsSandboxConfig.LAUNCHER_NAME);
+        return candidate.isFile() ? candidate : null;
     }
 
-    /** True when the PRoot runtime is present. */
+    /**
+     * True when the whole PRoot runtime is present.
+     *
+     * Every file of the runtime has to be there, otherwise the launcher would
+     * start and fail in a way that is hard to read.
+     */
     public boolean isRuntimeAvailable() {
-        return findLauncher() != null;
+        if (nativeLibraryDirectory == null || !nativeLibraryDirectory.isDirectory()) return false;
+        for (String name : SdsSandboxConfig.RUNTIME_FILES) {
+            if (!new File(nativeLibraryDirectory, name).isFile()) return false;
+        }
+        return true;
+    }
+
+    /**
+     * True when every file of the runtime has the checksum it must have.
+     *
+     * The check is done once and it is remembered, because the files do not
+     * change while the app runs.
+     */
+    public boolean isRuntimeIntact() {
+        if (checksumKnown) return checksumValid;
+        checksumKnown = true;
+        checksumValid = false;
+        if (nativeLibraryDirectory == null || !nativeLibraryDirectory.isDirectory()) return false;
+        for (int index = 0; index < SdsSandboxConfig.RUNTIME_FILES.length; index++) {
+            File file = new File(nativeLibraryDirectory, SdsSandboxConfig.RUNTIME_FILES[index]);
+            if (!file.isFile()) return false;
+            try {
+                String checksum = SdsHash.sha256(file);
+                if (!SdsSandboxConfig.RUNTIME_SHA256[index].equals(checksum)) return false;
+            } catch (java.io.IOException refused) {
+                return false;
+            }
+        }
+        checksumValid = true;
+        return true;
     }
 
     /** The directory the root filesystem is unpacked into. */
     public File getRootfsDirectory() {
         if (filesDirectory == null) return null;
         return new File(filesDirectory, SdsSandboxConfig.ROOTFS_DIRECTORY);
+    }
+
+    /** The private directory of the app, the temporary directory of PRoot. */
+    public File getFilesDirectory() {
+        return filesDirectory;
     }
 
     /** The directory the sandbox mounts as the home of the root user. */
@@ -186,7 +224,7 @@ public final class SdsSandboxManager {
 
     /** True when a command can run right now. */
     public boolean isReady() {
-        return isRuntimeAvailable() && isRootfsReady();
+        return isRuntimeAvailable() && isRuntimeIntact() && isRootfsReady();
     }
 
     /** A short description of the state, shown in the console. */
@@ -195,6 +233,10 @@ public final class SdsSandboxManager {
         builder.append(isRuntimeAvailable()
                 ? "the PRoot runtime is bundled"
                 : "the PRoot runtime is not bundled in this build");
+        if (isRuntimeAvailable() && !isRuntimeIntact()) {
+            builder.append(", but a file of the runtime does not match its checksum");
+            return builder.toString();
+        }
         builder.append(isRootfsReady()
                 ? ", the root filesystem is ready"
                 : ", the root filesystem is not downloaded yet");

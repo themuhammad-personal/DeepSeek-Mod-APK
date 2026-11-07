@@ -78,6 +78,10 @@ public final class SdsSandboxTool {
                     return new SdsToolResult(SdsToolResult.Status.FAILED, "",
                             "the PRoot runtime is not bundled in this build");
                 }
+                if (!manager.isRuntimeIntact()) {
+                    return new SdsToolResult(SdsToolResult.Status.FAILED, "",
+                            "a file of the PRoot runtime does not match its checksum");
+                }
                 if (!manager.isRootfsReady()) {
                     return new SdsToolResult(SdsToolResult.Status.FAILED, "",
                             "the root filesystem is not ready");
@@ -93,22 +97,38 @@ public final class SdsSandboxTool {
                         SdsSandboxConfig.MAX_TIMEOUT_SECONDS * 1000L);
                 long timeoutSeconds = Math.max(1L, timeoutMs / 1000L);
 
-                ProcessBuilder builder = new ProcessBuilder(
-                        launcher.getAbsolutePath(),
-                        "-r", rootfs.getAbsolutePath(),
-                        "-0",
-                        "--link2symlink",
-                        // The device nodes and the process list of the app are
-                        // bound into the guest, the same way the reference proof of
-                        // concept did it.
-                        "-b", "/dev",
-                        "-b", "/proc",
-                        "-w", "/root",
-                        "/bin/sh", "-c", command);
+                java.util.List<String> arguments = new java.util.ArrayList<>();
+                arguments.add(launcher.getAbsolutePath());
+                arguments.add("-r");
+                arguments.add(rootfs.getAbsolutePath());
+                arguments.add("-0");
+                arguments.add("--link2symlink");
+                // The device nodes and the process list of the app are bound into
+                // the guest, the same way the reference design of the proof of
+                // concept did it. A path that does not exist on the device is
+                // skipped, because PRoot refuses to start for a missing bind.
+                for (String bind : new String[]{"/dev", "/proc"}) {
+                    if (new File(bind).isDirectory()) {
+                        arguments.add("-b");
+                        arguments.add(bind);
+                    }
+                }
+                arguments.add("-w");
+                arguments.add("/root");
+                arguments.add("/bin/sh");
+                arguments.add("-c");
+                arguments.add(command);
+                ProcessBuilder builder = new ProcessBuilder(arguments);
                 builder.redirectErrorStream(true);
                 Map<String, String> environment = builder.environment();
+                // The temporary directory of PRoot has to be writable by the app,
+                // so it is the private directory of the app and not the workspace.
+                File temporaryDirectory = manager.getFilesDirectory();
+                if (temporaryDirectory == null) {
+                    temporaryDirectory = context.getWorkspace();
+                }
                 for (String[] entry : SdsSandboxConfig.environment(
-                        context.getWorkspace().getAbsolutePath(), "/root")) {
+                        temporaryDirectory.getAbsolutePath(), "/root")) {
                     environment.put(entry[0], entry[1]);
                 }
                 // The environment of the app is not inherited, so a token of the

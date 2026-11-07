@@ -605,14 +605,24 @@ public final class SdsAgentCoreSelfTest {
         check(manager.describe().contains("not bundled"), "the state must be described");
         check(SdsSandboxConfig.ROOTFS_SHA256.length() == 64, "the root filesystem must be pinned");
 
-        // A launcher that is present makes the runtime available, but the root
-        // filesystem still has to be unpacked and verified.
-        File launcher = new File(nativeLibraryDirectory, "libproroot.so");
+        // The runtime needs every one of its files, not only the launcher.
+        File launcher = new File(nativeLibraryDirectory, SdsSandboxConfig.LAUNCHER_NAME);
         writeFile(launcher, "#!/bin/sh\n");
         launcher.setExecutable(true);
         SdsSandboxManager withLauncher = new SdsSandboxManager(nativeLibraryDirectory, filesDirectory);
-        check(withLauncher.isRuntimeAvailable(), "the bundled runtime must be found");
-        check(!withLauncher.isRootfsReady(), "the root filesystem must still be missing");
+        check(!withLauncher.isRuntimeAvailable(),
+                "a runtime with only the launcher must not be used");
+        check(withLauncher.findLauncher() != null, "the launcher must be found");
+        for (String name : SdsSandboxConfig.RUNTIME_FILES) {
+            writeFile(new File(nativeLibraryDirectory, name), "not the real runtime");
+        }
+        SdsSandboxManager complete = new SdsSandboxManager(nativeLibraryDirectory, filesDirectory);
+        check(complete.isRuntimeAvailable(), "the whole runtime must be found");
+        check(!complete.isRuntimeIntact(),
+                "a runtime whose checksum does not match must not be used");
+        check(!complete.isReady(), "a runtime that is not intact must not be ready");
+        check(complete.describe().contains("checksum"),
+                "the state must name the checksum that does not match");
 
         File rootfs = withLauncher.getRootfsDirectory();
         check(rootfs.mkdirs(), "rootfs directory create failed");
@@ -620,7 +630,8 @@ public final class SdsAgentCoreSelfTest {
                 SdsSandboxConfig.ROOTFS_SHA256 + "\n");
         SdsSandboxManager ready = new SdsSandboxManager(nativeLibraryDirectory, filesDirectory);
         check(ready.isRootfsReady(), "the verified root filesystem must be ready");
-        check(ready.isReady(), "the studio must be ready");
+        check(!ready.isReady(),
+                "the studio must not be ready while the runtime is not intact");
 
         // A root filesystem with a wrong checksum must not be accepted.
         writeFile(new File(rootfs, SdsSandboxConfig.ROOTFS_MARKER), "0".repeat(64) + "\n");

@@ -23,6 +23,9 @@
 #   --source-url <url>    the address of the pinned extraction bundle.
 #   --source-sha256 <sh>  the checksum of that bundle.
 #   --out <directory>     where the result is written. Default: build-local.
+#   --proroot-dir <dir>   a folder with the five libproroot*.so files of the
+#                          Linux Studio. They are added to the APK and the
+#                          runtime only runs when every checksum matches.
 #
 # Requirements: a JDK 21, python3, curl, unzip and the Android SDK with the
 # build tools 36.0.0 (for zipalign and apksigner).
@@ -35,6 +38,7 @@ SOURCE_FILE=""
 SOURCE_URL="${SDS_SOURCE_URL:-https://drive.usercontent.google.com/download?id=1zKivuIhspDNuEpI74Q0QLtAP7ZtDfMM0&export=download&confirm=t}"
 SOURCE_SHA256="${SDS_SOURCE_SHA256:-b0ec418ec9b8a273479acd8fed73acefbdbddd34162684c50e1737abb70d74de}"
 OUT="$WORK"
+PROROOT_DIR="${SDS_PROROOT_DIR:-}"
 
 MORPHE_CLI_VERSION="2.1.1"
 MORPHE_CLI_SHA256="3a2efefd567b44dde15971a58d5aa649a32aba30781d3400dc08d688c720168f"
@@ -46,6 +50,7 @@ while [[ $# -gt 0 ]]; do
     --source-url) SOURCE_URL="$2"; shift 2 ;;
     --source-sha256) SOURCE_SHA256="$2"; shift 2 ;;
     --out) OUT="$2"; shift 2 ;;
+    --proroot-dir) PROROOT_DIR="$2"; shift 2 ;;
     -h|--help) sed -n '2,30p' "${BASH_SOURCE[0]}"; exit 0 ;;
     *) echo "unknown option: $1" >&2; exit 2 ;;
   esac
@@ -136,7 +141,16 @@ for name in applied:
     print(" -", name)
 PYRESULT
 
-# 6. The signature. The key is generated on this machine and never leaves it.
+# 6. The optional runtime of the Linux Studio.
+# The five files of the PRoot runtime are not redistributable and they are not
+# part of this repository. Put them into a folder and point the script at it.
+if [[ -n "$PROROOT_DIR" ]]; then
+  say "the runtime of the Linux Studio"
+  python3 "$ROOT/scripts/inject_native_libs.py" \
+    "$WORK/deepseek-patched-unsigned.apk" "$PROROOT_DIR"
+fi
+
+# 7. The signature. The key is generated on this machine and never leaves it.
 say "the signature"
 KEYSTORE="$WORK/sds-local.keystore"
 if [[ ! -f "$KEYSTORE" ]]; then
@@ -156,7 +170,7 @@ fi
   "$WORK/deepseek-patched-signed.apk" "$WORK/deepseek-patched.apk"
 "$BUILD_TOOLS/apksigner" verify --verbose "$WORK/deepseek-patched.apk" | head -5
 
-# 7. The proof of the hook call sites.
+# 8. The proof of the hook call sites.
 say "the proof of the hook call sites"
 python3 -m pip install --quiet --disable-pip-version-check androguard
 python3 "$ROOT/scripts/verify_patched_hooks.py" \
