@@ -36,6 +36,13 @@ the behaviour this project must not have: model output is untrusted. The port
 keeps the two seams but changes the semantics: the hook only *collects* a
 proposal, and the proposal is executed only after the user pressed Approve.
 
+**Handback of the result.** The result of an approved run can be added to the
+conversation, marked with `[SDS:TOOL_RESULT]`, right before the app writes the
+content that it renders (`SdsToolResultHandoff`, `SdsAgentHooks.observeResponseAppend`).
+The switch is off by default, the marker makes it idempotent and only an
+approved result is ever handed back. The flow is proved statically in the
+patched DEX and it still needs the device run.
+
 **Safety.** The tool allow-list is a closed set of registered objects, there is
 no lookup by class name and no reflection. Every tool declares a strict flat
 argument schema; a nested object, an array, a trailing byte or an unknown key
@@ -50,8 +57,8 @@ extension classes are never reached.
 **Tests.** `scripts/test-agent-core.sh` covers the parser, the queue and the
 deduplication, the per-response limit, the strict grammar, the registry, the
 approval gate, the approved run, the refusal of an unregistered tool, the
-refusal of a network tool, the timeout, the cancellation and the workspace
-escape.
+refusal of a network tool, the timeout, the cancellation, the workspace escape
+and the handback of a result.
 
 ---
 

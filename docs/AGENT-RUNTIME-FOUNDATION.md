@@ -69,6 +69,29 @@
   runtime state with the app-private directories, and the holder that the
   plain-Java feature logic uses so it can be regression tested.
 
+### The handback of a tool result (static-verified, build-verified, not device-runtime-verified)
+
+- `SdsToolResultHandoff`: holds the result of an approved run and adds it to
+  the content once, marked with `[SDS:TOOL_RESULT]`. It is off by default, it
+  checks the marker before it adds anything and it only ever hands back the
+  result of an approved run.
+- `SdsAgentHooks.observeResponseAppend` is the new call site. It runs **before**
+  the content update of the streaming APPEND method, so the value that the app
+  writes into its own content holder is the value that the chat renders. The
+  CI verification proves that the call site reads the register of the
+  accumulated content and that its result is written back into that register
+  before the update.
+
+**Why.** The app renders the value it writes into its own content holder. The
+reference proof of concept used the same seam to rewrite the answer. This
+project uses it only for the result of an approved tool run, and only when the
+user turns the switch on.
+
+**Safety.** The switch is off by default, the marker makes the operation
+idempotent, and the result of a run that was not approved is never handed
+back. The device run still has to prove that the chat renders the rewritten
+content.
+
 ### Observability (build-verified, not device-runtime-verified)
 
 - `SdsObserverDiagnostics`: measures the response observer **without storing any assistant content**. It counts the callbacks, the distinct contents, the duplicated contents, the growing and shrinking contents, the first and last content length, and the threads the callbacks arrived on. The content digest is salted with a random value that is created once per process, so a digest cannot be used to look up a known text.
@@ -99,6 +122,7 @@ See docs/DEEPSEEK-STREAM-TRACE.md for the obfuscated classes, methods and eviden
 | Bounded work | The timeout, the output limit and the per-turn tool-call cap are all clamped |
 | Workspace confinement | Every path goes through `SdsWorkspaceGuard`; a refusal becomes a failed result |
 | Untrusted model output | The proposal is parsed with a strict bounded parser and validated against the per-tool schema before anything runs |
+| Only an approved result is handed back | `SdsToolResultHandoff` only holds the result of a run the session approved, and it adds it once |
 | No sensitive logs | The diagnostics store lengths, timings and a salted digest; the timeline stores a tool name and a status |
 | No silent shell | The only tool that runs a command is `sandbox.run`, it is only on the allow-list while the user turns it on, and every single command needs its own approval |
 | No token in a command | The environment of the app is not inherited by the sandbox, so only five fixed variables reach a command |
@@ -118,6 +142,9 @@ See docs/DEEPSEEK-STREAM-TRACE.md for the obfuscated classes, methods and eviden
   removes the tool from the allow-list instead of only hiding it.
 - The network is switched off by a switch in the console and the switch
   rebuilds the executor with the matching policy, so the effect is immediate.
+- The handback of a tool result is switched off by a switch in the console, so
+  the conversation keeps the content of the model until the device run proves
+  the flow.
 - An MCP server that the user just entered is switched off, and switching it
   off removes its tools from the allow-list.
 

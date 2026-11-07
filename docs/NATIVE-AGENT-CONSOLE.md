@@ -36,6 +36,15 @@ placement and the touch behaviour on a device are still unproven.
 
 ## Current controls
 
+**Return the result of a tool to the chat**
+
+- The switch is off by default. The flow is proved statically, not on a device.
+- When it is on, the result of an approved run is added once to the
+  conversation, marked with `[SDS:TOOL_RESULT]`, right before the app writes
+  the content that it renders.
+- The marker is checked first, so a repeated callback never duplicates the
+  result, and only the result of an approved run is ever handed back.
+
 **Tool proposal mode**
 
 - Allow DeepSeek to propose native tools: enables the prompt guidance for the
@@ -199,8 +208,9 @@ before any code of the tool is reached.
 
 - The console is not a chat replacement and does not change the official chat
   screen.
-- Tool results are **not** sent back to DeepSeek yet. There is no verified
-  native flow for that, and the results are only shown in the console.
+- The tool result can be returned to the chat, but the flow is only proved
+  statically. The switch is off by default and the device run has to prove
+  that the chat renders the rewritten content and that nothing else changes.
 - The proposal queue is in-memory and the proposal mode is session-only.
 - The PRoot runtime is not bundled in this build, so the Linux Studio refuses
   to run and says so.
@@ -223,6 +233,7 @@ before any code of the tool is reached.
 | The root filesystem checksum does not match | The root filesystem is not accepted and the studio is not ready |
 | The system file picker cannot be opened | The export shows a message and nothing is written |
 | An unknown slash command is typed | The prompt is sent unchanged, nothing is dropped |
+| The handback is on and the content already carries the marker | The content is left alone, the result is never added twice |
 | The network is off | The executor refuses every tool that needs the network |
 | The MCP server is not reachable | The tool returns a failed result and the token never appears in the message |
 | The address answers with an error | The fetch reports the status and no text is shown |
