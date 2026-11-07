@@ -36,9 +36,15 @@ public final class SdsAgentHooks {
     /**
      * Called after a ResponseFragment content SET or APPEND mutation.
      * Both hooks pass the complete accumulated content, not just a delta.
+     *
+     * The observer diagnostics are recorded even when proposal mode is off, so a
+     * device test can prove that the hook fires and that it receives the complete
+     * accumulated content. The diagnostics never store the content itself.
      */
     public static void observeResponse(String completeContent) {
-        if (!enabled || completeContent == null) return;
+        if (completeContent == null) return;
+        SdsObserverDiagnostics.get().onResponse(completeContent);
+        if (!enabled) return;
         for (SdsToolCall call : SdsToolCallParser.parse(completeContent)) {
             synchronized (PENDING) {
                 if (!enabled || !SEEN_IDS.add(call.getId())) continue;
@@ -50,6 +56,11 @@ public final class SdsAgentHooks {
                 }
             }
         }
+    }
+
+    /** The observer metrics of this process. */
+    public static SdsObserverDiagnostics getDiagnostics() {
+        return SdsObserverDiagnostics.get();
     }
 
     /** Session-only until a separately verified preference initialization hook exists. */

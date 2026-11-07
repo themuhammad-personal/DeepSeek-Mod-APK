@@ -13,6 +13,16 @@ javac -encoding UTF-8 -d "$TMP/classes" \
   "$SRC/SdsToolResult.java" \
   "$SRC/SdsWorkspaceGuard.java" \
   "$SRC/SdsToolCallParser.java" \
+  "$SRC/SdsObserverDiagnostics.java" \
+  "$SRC/SdsCancellation.java" \
+  "$SRC/SdsAgentEvent.java" \
+  "$SRC/SdsAgentSession.java" \
+  "$SRC/SdsToolArguments.java" \
+  "$SRC/SdsTool.java" \
+  "$SRC/SdsToolContext.java" \
+  "$SRC/SdsToolRegistry.java" \
+  "$SRC/SdsToolExecutor.java" \
+  "$SRC/SdsWorkspaceTools.java" \
   "$SRC/SdsAgentHooks.java"
 javac -encoding UTF-8 -cp "$TMP/classes" -d "$TMP/classes" "$TEST"
 java -cp "$TMP/classes" com.themuhammad.deepseekmod.extension.SdsAgentCoreSelfTest

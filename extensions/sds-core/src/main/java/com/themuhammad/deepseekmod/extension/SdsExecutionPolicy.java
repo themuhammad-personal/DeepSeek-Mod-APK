@@ -47,6 +47,8 @@ public final class SdsExecutionPolicy {
     public String limitOutput(String value) {
         if (value == null) return "";
         if (value.length() <= maxOutputChars) return value;
-        return value.substring(0, maxOutputChars) + "\n[output truncated]";
+        String marker = "\n[output truncated]";
+        int keep = Math.max(0, maxOutputChars - marker.length());
+        return value.substring(0, keep) + marker;
     }
 }

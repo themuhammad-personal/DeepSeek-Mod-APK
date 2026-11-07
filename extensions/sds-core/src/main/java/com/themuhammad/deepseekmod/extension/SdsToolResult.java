@@ -11,11 +11,15 @@ public final class SdsToolResult {
     private final String safeError;
 
     public SdsToolResult(Status status, String output, String safeError) {
+        this(status, output, safeError, SdsExecutionPolicy.SAFE_DEFAULT);
+    }
+
+    public SdsToolResult(Status status, String output, String safeError, SdsExecutionPolicy policy) {
         if (status == null) throw new IllegalArgumentException("status is required");
+        SdsExecutionPolicy effective = policy == null ? SdsExecutionPolicy.SAFE_DEFAULT : policy;
         this.status = status;
-        this.output = SdsExecutionPolicy.SAFE_DEFAULT.limitOutput(output);
-        this.safeError = safeError == null ? "" :
-                SdsExecutionPolicy.SAFE_DEFAULT.limitOutput(safeError);
+        this.output = effective.limitOutput(output);
+        this.safeError = safeError == null ? "" : effective.limitOutput(safeError);
     }
 
     public Status getStatus() { return status; }
