@@ -41,6 +41,7 @@ javac -encoding UTF-8 -d "$TMP/classes" \
   "$SRC/SdsResearchTools.java" \
   "$SRC/SdsSlashCommands.java" \
   "$SRC/SdsRuntimeRegistry.java" \
+  "$SRC/SdsToolResultHandoff.java" \
   "$SRC/SdsAgentHooks.java"
 javac -encoding UTF-8 -cp "$TMP/classes" -d "$TMP/classes" "$TEST"
 java -cp "$TMP/classes" com.themuhammad.deepseekmod.extension.SdsAgentCoreSelfTest

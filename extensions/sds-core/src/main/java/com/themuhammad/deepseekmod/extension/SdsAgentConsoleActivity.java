@@ -66,6 +66,7 @@ public final class SdsAgentConsoleActivity extends Activity {
     private TextView resultStatus;
     private Switch proposalMode;
     private Switch includeMemory;
+    private Switch handoffSwitch;
     private EditText memoryInput;
     private EditText projectInput;
 
@@ -115,6 +116,24 @@ public final class SdsAgentConsoleActivity extends Activity {
 
         LinearLayout modeCard = card();
         modeCard.addView(text("Tool proposal mode", 16, TEXT, true), matchWrap());
+        handoffSwitch = new Switch(this);
+        handoffSwitch.setText("Return the result of a tool to the chat");
+        handoffSwitch.setTextColor(TEXT);
+        handoffSwitch.setTextSize(13);
+        handoffSwitch.setChecked(SdsToolResultHandoff.isEnabled());
+        handoffSwitch.setOnCheckedChangeListener((button, checked) -> {
+            SdsToolResultHandoff.setEnabled(checked);
+        });
+        addGap(root, 8);
+        root.addView(handoffSwitch, matchWrap());
+        TextView handoffNote = text(
+                "Off by default: the flow is proved statically, not on a device. The result is "
+                        + "added once, marked with " + SdsToolResultHandoff.MARKER + ".",
+                11, MUTED, false);
+        LinearLayout.LayoutParams handoffNoteParams = matchWrap();
+        handoffNoteParams.topMargin = dp(4);
+        root.addView(handoffNote, handoffNoteParams);
+
         proposalMode = new Switch(this);
         proposalMode.setText("Allow DeepSeek to propose native tools");
         proposalMode.setTextColor(TEXT);
@@ -1188,6 +1207,10 @@ public final class SdsAgentConsoleActivity extends Activity {
                     SdsExecutionPolicy.SAFE_DEFAULT,
                     session.getCancellation());
             SdsToolResult result = executor.run(approved, context, true);
+            if (result != null && result.getStatus() == SdsToolResult.Status.SUCCESS) {
+                // The result waits for the next accumulated content of the conversation.
+                SdsToolResultHandoff.setPendingResult(result.getOutput());
+            }
             runOnUiThread(() -> {
                 if (result.getStatus() == SdsToolResult.Status.SUCCESS) {
                     session.onRunSucceeded(result);

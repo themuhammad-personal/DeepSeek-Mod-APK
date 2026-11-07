@@ -14,7 +14,7 @@ import app.morphe.patcher.patch.patch
 @Suppress("unused")
 val nativeAgentHooksPatch = patch(
     name = "Native Agent hook points (experimental)",
-    description = "Hooks the prompt serializer and the actual streaming ResponseFragment SET/APPEND mutations. Tool proposals are collected only.",
+    description = "Hooks the prompt serializer and the actual streaming ResponseFragment SET/APPEND mutations. Tool proposals are collected only and the handback of a tool result is off by default.",
     default = false
 ) {
     compatibleWith(DEEPSEEK_2_7_4)
@@ -52,6 +52,17 @@ val nativeAgentHooksPatch = patch(
             appendedContent.invokeIndex + 1,
             """
                 invoke-static { v${appendedContent.contentRegister} }, Lcom/themuhammad/deepseekmod/extension/SdsAgentHooks;->observeResponse(Ljava/lang/String;)V
+            """
+        )
+
+        // The handback of a tool result has to happen before the update, because the
+        // value that is written into the content holder is the value that the chat
+        // renders. The hook is off by default and it never writes twice.
+        ChatResponseContentAppendFingerprint.method.addInstructions(
+            appendedContent.invokeIndex,
+            """
+                invoke-static { v${appendedContent.contentRegister} }, Lcom/themuhammad/deepseekmod/extension/SdsAgentHooks;->observeResponseAppend(Ljava/lang/String;)Ljava/lang/String;
+                move-result-object v${appendedContent.contentRegister}
             """
         )
     }

@@ -50,6 +50,7 @@ CONSOLE_ACTIVITY = "com.themuhammad.deepseekmod.extension.SdsAgentConsoleActivit
 
 BEFORE_PROMPT = HOOKS_CLASS + "->beforePrompt(Ljava/lang/String;)Ljava/lang/String;"
 OBSERVE_RESPONSE = HOOKS_CLASS + "->observeResponse(Ljava/lang/String;)V"
+OBSERVE_RESPONSE_APPEND = HOOKS_CLASS + "->observeResponseAppend(Ljava/lang/String;)Ljava/lang/String;"
 CHAT_ENTRY_HOOK = EXTENSION_PACKAGE + "SdsChatEntry;->attach(Landroid/app/Activity;)V"
 
 PROMPT_FIELD = "Lly1;->c"
@@ -67,6 +68,7 @@ REQUIRED_EXTENSION_CLASSES = [
     EXTENSION_PACKAGE + "SdsCoreMarker;",
     EXTENSION_PACKAGE + "SdsAgentConsoleActivity;",
     EXTENSION_PACKAGE + "SdsChatEntry;",
+    EXTENSION_PACKAGE + "SdsToolResultHandoff;",
 ]
 
 # Type descriptors are collected from the disassembled output of the DEX files.
@@ -302,6 +304,51 @@ def main() -> int:
                     f"observeResponse reads {actual} but the accumulated content is in {expected}"
                 )
                 print(f"  FAILED  observeResponse reads {actual}, accumulated content register is {expected}")
+
+            # The handback of a tool result has to happen before the update, because
+            # the value that is written is the value that the chat renders.
+            handoff_index, _ = find_instruction(append_instructions, OBSERVE_RESPONSE_APPEND)
+            if handoff_index < 0:
+                failures.append(
+                    "streaming APPEND method does not call SdsAgentHooks.observeResponseAppend"
+                )
+                print("  MISSING SdsAgentHooks.observeResponseAppend call")
+            else:
+                handoff_registers, _ = parse_instruction(append_instructions[handoff_index])
+                handed = handoff_registers[0] if handoff_registers else None
+                if handed and expected and handed == expected:
+                    print(f"  OK      observeResponseAppend reads the content register {handed}")
+                else:
+                    failures.append(
+                        f"observeResponseAppend reads {handed} but the content is in {expected}"
+                    )
+                    print(f"  FAILED  observeResponseAppend reads {handed}, content register is {expected}")
+                if update_index > 0 and handoff_index < update_index:
+                    following = (
+                        append_instructions[handoff_index + 1]
+                        if handoff_index + 1 < len(append_instructions)
+                        else None
+                    )
+                    if following is not None and following.get_name() == "move-result-object":
+                        move_registers, _ = parse_instruction(following)
+                        if move_registers and move_registers[0] == expected:
+                            print(
+                                f"  OK      the handback is written back into {expected} before the update"
+                            )
+                        else:
+                            failures.append(
+                                "the handback result is not written back into the content register"
+                            )
+                            print("  FAILED  the handback result is not written back")
+                    else:
+                        failures.append("the handback result is not moved into a register")
+                        print("  FAILED  the handback result is not moved into a register")
+                else:
+                    failures.append(
+                        "the handback has to run before the content update, otherwise the "
+                        "result never reaches the chat"
+                    )
+                    print("  FAILED  the handback does not run before the update")
 
             if builder_index < 0:
                 failures.append("streaming APPEND method does not build the content with a StringBuilder")

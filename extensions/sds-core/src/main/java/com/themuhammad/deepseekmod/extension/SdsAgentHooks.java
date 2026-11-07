@@ -65,6 +65,21 @@ public final class SdsAgentHooks {
         }
     }
 
+    /**
+     * Called on the accumulated content before the app stores it.
+     *
+     * It observes the content exactly like {@link #observeResponse(String)} and
+     * it can add the result of an approved tool run to the content, so the
+     * model reads what the tool returned. The handback is off by default and
+     * it never happens twice, because the marker is checked first.
+     *
+     * @return the content that the app has to store
+     */
+    public static String observeResponseAppend(String completeContent) {
+        observeResponse(completeContent);
+        return SdsToolResultHandoff.applyTo(completeContent);
+    }
+
     /** The observer metrics of this process. */
     public static SdsObserverDiagnostics getDiagnostics() {
         return SdsObserverDiagnostics.get();

@@ -38,6 +38,7 @@ public final class SdsAgentCoreSelfTest {
         testStrictJsonReader();
         testMcpConfiguration();
         testNetworkToolsStayRefused();
+        testToolResultHandoff();
         System.out.println("SDS agent-core self-test: PASS (" + checks + " checks)");
     }
 
@@ -387,6 +388,37 @@ public final class SdsAgentCoreSelfTest {
     private static void check(boolean condition, String message) {
         checks++;
         if (!condition) throw new AssertionError(message);
+    }
+
+    private static void testToolResultHandoff() {
+        SdsToolResultHandoff.setEnabled(false);
+        SdsToolResultHandoff.clearPendingResult();
+        SdsToolResultHandoff.setPendingResult("the output of the tool");
+
+        // While the handback is off, the content is never touched.
+        String untouched = SdsToolResultHandoff.applyTo("the answer of the model");
+        check("the answer of the model".equals(untouched),
+                "the content must stay untouched while the handback is off");
+        check(SdsToolResultHandoff.hasPendingResult(),
+                "the result must still wait while the handback is off");
+
+        SdsToolResultHandoff.setEnabled(true);
+        String first = SdsToolResultHandoff.applyTo("the answer of the model");
+        check(first.contains("the answer of the model"), "the content must be kept");
+        check(first.contains("the output of the tool"), "the result must be added");
+        check(first.contains(SdsToolResultHandoff.MARKER), "the result must be marked");
+        check(!SdsToolResultHandoff.hasPendingResult(), "the result must not wait twice");
+
+        // A second callback must not add the result again.
+        String second = SdsToolResultHandoff.applyTo(first);
+        check(second.equals(first), "the result must not be added twice");
+
+        SdsToolResultHandoff.setPendingResult("another output");
+        String third = SdsToolResultHandoff.applyTo(first);
+        check(third.equals(first), "a marked content must not be changed again");
+
+        SdsToolResultHandoff.setEnabled(false);
+        SdsToolResultHandoff.clearPendingResult();
     }
 
     private static void testStrictJsonReader() {
