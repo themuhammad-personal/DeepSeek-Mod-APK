@@ -1,0 +1,300 @@
+name: Build DeepSeek 2.7.5 (296) from the owner's single Drive APK
+
+on:
+  push:
+    branches:
+      - "final/2.7.5-296-split-apk"
+    paths:
+      - ".github/workflows/build-deepseek-296-single-apk.yml"
+      - "patches/**"
+      - "extensions/**"
+      - "scripts/verify_fingerprints.py"
+      - "scripts/verify_patched_hooks.py"
+      - "scripts/verify_login_untouched.py"
+      - "scripts/verify_native_only.py"
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: deepseek-296-single-apk-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Download the exact Drive APK, patch and verify it
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - name: Check out the final branch
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "9.8.2"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+
+      - name: Install Android SDK platform and build tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkmanager --install "platforms;android-36" "build-tools;36.0.0"
+          test -s "$ANDROID_HOME/platforms/android-36/android.jar"
+          test -x "$ANDROID_HOME/build-tools/36.0.0/aapt"
+          test -x "$ANDROID_HOME/build-tools/36.0.0/apksigner"
+          test -x "$ANDROID_HOME/build-tools/36.0.0/zipalign"
+          test -x "$ANDROID_HOME/build-tools/36.0.0/dexdump"
+
+      - name: Download only the APK linked by the owner in Google Drive
+        shell: bash
+        run: |
+          set -euo pipefail
+          WORK="$RUNNER_TEMP/deepseek-296"
+          mkdir -p "$WORK"
+          FILE_ID="1r4__RT5nFRmkfxHuK4sLWgGeNXGKbS3o"
+          URLS=(
+            "https://drive.google.com/uc?export=download&id=$FILE_ID"
+            "https://drive.usercontent.google.com/download?id=$FILE_ID&export=download&confirm=t"
+          )
+          downloaded=false
+          for url in "${URLS[@]}"; do
+            rm -f "$WORK/drive-response"
+            if curl --proto '=https' --tlsv1.2 --fail --location --retry 2 --max-time 900 \
+              -A "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/120 Safari/537.36" \
+              "$url" --output "$WORK/drive-response"; then
+              if python3 - "$WORK/drive-response" <<'PY'
+          import pathlib, sys, zipfile
+          p = pathlib.Path(sys.argv[1])
+          if not zipfile.is_zipfile(p):
+              raise SystemExit("Drive returned an HTML/error page, not an APK archive")
+          with zipfile.ZipFile(p) as z:
+              if "AndroidManifest.xml" not in z.namelist():
+                  raise SystemExit("Downloaded ZIP is not an Android APK")
+          PY
+              then
+                downloaded=true
+                break
+              fi
+            fi
+          done
+          if [[ "$downloaded" != "true" ]]; then
+            echo "::error::Could not retrieve a valid APK from the owner's exact Drive link. Check that the file is shared as Anyone with the link."
+            exit 1
+          fi
+          cp "$WORK/drive-response" "$WORK/official-from-owner-drive.apk"
+          sha256sum "$WORK/official-from-owner-drive.apk" | tee "$WORK/source.sha256"
+          stat -c "Owner Drive APK size: %s bytes" "$WORK/official-from-owner-drive.apk"
+          unzip -tq "$WORK/official-from-owner-drive.apk"
+
+      - name: Verify the Drive APK is a standalone DeepSeek 2.7.5 build 296
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="$RUNNER_TEMP/deepseek-296/official-from-owner-drive.apk"
+          AAPT="$ANDROID_HOME/build-tools/36.0.0/aapt"
+          "$AAPT" dump badging "$APK" | tee "$RUNNER_TEMP/deepseek-296/source-badging.txt"
+          grep -F "package: name='com.deepseek.chat' versionCode='296' versionName='2.7.5'" \
+            "$RUNNER_TEMP/deepseek-296/source-badging.txt"
+          if grep -q "split='" "$RUNNER_TEMP/deepseek-296/source-badging.txt"; then
+            echo "::error::The linked file is a split APK, not a standalone APK. This job accepts only the single APK the owner linked and will not fetch or substitute additional files."
+            exit 1
+          fi
+          echo "Verified the exact Drive download as one standalone DeepSeek 2.7.5 / 296 APK."
+
+      - name: Run approval-first native regression tests
+        shell: bash
+        run: bash scripts/test-agent-core.sh
+
+      - name: Verify the build-296 fingerprints against the Drive APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet --disable-pip-version-check androguard
+          python3 scripts/verify_fingerprints.py \
+            "$RUNNER_TEMP/deepseek-296/official-from-owner-drive.apk" \
+            --version-code 296
+
+      - name: Build the Morphe patch bundle
+        shell: bash
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gradle --no-daemon buildAndroid
+          MPP="$(find patches/build/libs -maxdepth 1 -name '*.mpp' -print -quit)"
+          test -n "$MPP"
+          echo "MPP=$MPP" >> "$GITHUB_ENV"
+
+      - name: Download and verify the pinned Morphe Desktop CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 \
+            https://github.com/MorpheApp/morphe-desktop/releases/download/v2.1.1/morphe-desktop-2.1.1-all.jar \
+            --output "$RUNNER_TEMP/deepseek-296/morphe-desktop.jar"
+          echo "3a2efefd567b44dde15971a58d5aa649a32aba30781d3400dc08d688c720168f $RUNNER_TEMP/deepseek-296/morphe-desktop.jar" | sha256sum --check
+
+      - name: Apply the four native patches to the exact Drive APK
+        shell: bash
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          java -Xms1024m -Xmx4g -jar "$RUNNER_TEMP/deepseek-296/morphe-desktop.jar" \
+            patch --patches "$MPP" --exclusive --validate --bytecode-mode FULL \
+            --enable "DeepSeek 2.7.4 compatibility check" \
+            --enable "Native Agent hook points (experimental)" \
+            --enable "Super DeepSeek native Agent Console" \
+            --enable "Super DeepSeek native Agent chat entry" \
+            --result-file "$RUNNER_TEMP/deepseek-296/patch-result.json" \
+            --out "$RUNNER_TEMP/deepseek-296/patched-morphe.apk" \
+            "$RUNNER_TEMP/deepseek-296/official-from-owner-drive.apk" \
+            > "$RUNNER_TEMP/deepseek-296/morphe-apply.log" 2>&1 || {
+              cat "$RUNNER_TEMP/deepseek-296/morphe-apply.log"
+              exit 1
+            }
+          cat "$RUNNER_TEMP/deepseek-296/morphe-apply.log"
+          python3 - "$RUNNER_TEMP/deepseek-296/patch-result.json" <<'PY'
+          import json, sys
+          data=json.load(open(sys.argv[1],encoding="utf-8"))
+          expected={
+            "DeepSeek 2.7.4 compatibility check",
+            "Native Agent hook points (experimental)",
+            "Super DeepSeek native Agent Console",
+            "Super DeepSeek native Agent chat entry",
+          }
+          applied=set(data.get("appliedPatches") or [])
+          failed=data.get("failedPatches") or []
+          missing=expected-applied
+          if not data.get("success") or failed or missing:
+            raise SystemExit(f"Morphe patch failure: missing={sorted(missing)} failed={failed}")
+          print("All four patches applied to the Drive APK.")
+          PY
+
+      - name: Verify hooks, untouched login and native-only extension
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet --disable-pip-version-check androguard
+          PATCHED="$RUNNER_TEMP/deepseek-296/patched-morphe.apk"
+          ORIGINAL="$RUNNER_TEMP/deepseek-296/official-from-owner-drive.apk"
+          python3 scripts/verify_patched_hooks.py "$PATCHED" "$ORIGINAL"
+          python3 scripts/verify_login_untouched.py "$PATCHED" "$ORIGINAL"
+          python3 scripts/verify_native_only.py "$PATCHED" "$ORIGINAL"
+          mkdir -p "$RUNNER_TEMP/deepseek-296/dex"
+          unzip -o -q "$PATCHED" '*.dex' -d "$RUNNER_TEMP/deepseek-296/dex"
+          for dex in "$RUNNER_TEMP/deepseek-296/dex"/*.dex; do
+            "$ANDROID_HOME/build-tools/36.0.0/dexdump" -f "$dex" >/dev/null
+          done
+
+      - name: Prepare the signing key
+        shell: bash
+        env:
+          SIGNING_KEY_BASE64: ${{ secrets.SDS_SIGNING_KEY_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.SDS_KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.SDS_KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.SDS_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          KEYSTORE="$RUNNER_TEMP/deepseek-296/release.jks"
+          if [[ -n "$SIGNING_KEY_BASE64" ]]; then
+            [[ -n "$KEYSTORE_PASSWORD" && -n "$KEY_PASSWORD" && -n "$KEY_ALIAS" ]] || {
+              echo "::error::Configure all four SDS signing secrets."
+              exit 2
+            }
+            printf '%s' "$SIGNING_KEY_BASE64" | base64 --decode > "$KEYSTORE"
+            echo "Persistent signing key loaded."
+          else
+            export KEYSTORE_PASSWORD="sds-temporary-$GITHUB_RUN_ID"
+            export KEY_PASSWORD="$KEYSTORE_PASSWORD"
+            export KEY_ALIAS="sds-temporary"
+            keytool -genkeypair -v -keystore "$KEYSTORE" -storetype JKS \
+              -alias "$KEY_ALIAS" -keyalg RSA -keysize 3072 -validity 10000 \
+              -storepass "$KEYSTORE_PASSWORD" -keypass "$KEY_PASSWORD" \
+              -dname "CN=Super DeepSeek Mod, OU=Android, O=Owner Build, L=Dhaka, S=BD, C=BD" >/dev/null
+            echo "::warning::Temporary signing key created. Configure persistent signing secrets before installing if future update builds are needed."
+          fi
+          {
+            echo "SDS_KEYSTORE=$KEYSTORE"
+            echo "SDS_KEY_ALIAS=$KEY_ALIAS"
+            echo "SDS_KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD"
+            echo "SDS_KEY_PASSWORD=$KEY_PASSWORD"
+            if [[ -n "$SIGNING_KEY_BASE64" ]]; then echo "SDS_PERSISTENT_KEY=true"; else echo "SDS_PERSISTENT_KEY=false"; fi
+          } >> "$GITHUB_ENV"
+
+      - name: Align and sign the patched standalone APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          BT="$ANDROID_HOME/build-tools/36.0.0"
+          "$BT/zipalign" -f -p 4 \
+            "$RUNNER_TEMP/deepseek-296/patched-morphe.apk" \
+            "$RUNNER_TEMP/deepseek-296/patched-aligned.apk"
+          "$BT/apksigner" sign \
+            --ks "$SDS_KEYSTORE" \
+            --ks-key-alias "$SDS_KEY_ALIAS" \
+            --ks-pass env:SDS_KEYSTORE_PASSWORD \
+            --key-pass env:SDS_KEY_PASSWORD \
+            --out "$RUNNER_TEMP/deepseek-296/deepseek-mod-2.7.5-296.apk" \
+            "$RUNNER_TEMP/deepseek-296/patched-aligned.apk"
+          "$BT/apksigner" verify --verbose "$RUNNER_TEMP/deepseek-296/deepseek-mod-2.7.5-296.apk"
+          "$BT/aapt" dump badging "$RUNNER_TEMP/deepseek-296/deepseek-mod-2.7.5-296.apk" \
+            | grep -F "package: name='com.deepseek.chat' versionCode='296' versionName='2.7.5'"
+
+      - name: Verify login and native app after final signing
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/verify_login_untouched.py \
+            "$RUNNER_TEMP/deepseek-296/deepseek-mod-2.7.5-296.apk" \
+            "$RUNNER_TEMP/deepseek-296/official-from-owner-drive.apk"
+          python3 scripts/verify_native_only.py \
+            "$RUNNER_TEMP/deepseek-296/deepseek-mod-2.7.5-296.apk" \
+            "$RUNNER_TEMP/deepseek-296/official-from-owner-drive.apk"
+
+      - name: Prepare APK report
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/deepseek-296/artifact"
+          cp "$RUNNER_TEMP/deepseek-296/deepseek-mod-2.7.5-296.apk" "$RUNNER_TEMP/deepseek-296/artifact/"
+          (
+            cd "$RUNNER_TEMP/deepseek-296/artifact"
+            sha256sum deepseek-mod-2.7.5-296.apk > deepseek-mod-2.7.5-296.apk.sha256
+          )
+          SOURCE_SHA="$(awk '{print $1}' "$RUNNER_TEMP/deepseek-296/source.sha256")"
+          {
+            echo "## DeepSeek 2.7.5 / versionCode 296 — single APK"
+            echo
+            echo "- Source: the exact Google Drive file ID `1r4__RT5nFRmkfxHuK4sLWgGeNXGKbS3o` supplied by the owner."
+            echo "- Source APK SHA-256: `$SOURCE_SHA`"
+            echo "- Patched APK SHA-256: `$(sha256sum "$RUNNER_TEMP/deepseek-296/deepseek-mod-2.7.5-296.apk" | awk '{print $1}')`"
+            echo "- All four Morphe patches applied and static verification passed."
+            echo "- Persistent signing key: $SDS_PERSISTENT_KEY"
+            if [[ "$SDS_PERSISTENT_KEY" != "true" ]]; then
+              echo
+              echo "WARNING: one-run signing key; later builds cannot update this installation."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the patched APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: deepseek-mod-2.7.5-296-apk
+          path: ${{ runner.temp }}/deepseek-296/artifact/*
+          if-no-files-found: error
+          retention-days: 7
