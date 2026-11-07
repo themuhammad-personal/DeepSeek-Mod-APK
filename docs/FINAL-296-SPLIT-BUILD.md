@@ -27,11 +27,16 @@ This reduces the risk that an experimental native Agent hook can block normal ch
 
 The workflow now requires a persistent owner-controlled signing key and no longer generates a temporary signing key. The alias is exactly `superdeepSeek`.
 
-Before dispatching the APK workflow, add these GitHub Actions repository secrets:
+Before triggering the APK workflow, add these GitHub Actions repository secrets:
 - `SDS_SIGNING_KEY_BASE64`
 - `SDS_KEYSTORE_PASSWORD`
 - `SDS_KEY_PASSWORD`
 - `SDS_KEY_ALIAS` = `superdeepSeek`
+
+Also add this repository variable:
+- `SDS_296_SIGNING_READY` = `true`
+
+The workflow job is skipped until that variable is set. This prevents a build from producing another APK with an accidental one-run key.
 
 Keep the JKS and passwords in a secure backup. Never commit the keystore or secrets. Losing the key means future builds cannot update an app signed with it.
 
