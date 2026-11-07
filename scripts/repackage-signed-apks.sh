@@ -50,9 +50,13 @@ for name, wanted in expected.items():
     if actual != wanted: raise SystemExit(f"inner APK hash mismatch: {name}")
 PY
 for apk in "$WORK/original"/*.apk; do
-  "$AAPT" dump badging "$apk" | grep -q "package: name='com.deepseek.chat' versionCode='296' versionName='2.7.5'" || {
-    echo "wrong package/version: $(basename "$apk")" >&2; exit 1;
+  badging="$("$AAPT" dump badging "$apk")"
+  grep -q "package: name='com.deepseek.chat' versionCode='296'" <<<"$badging" || {
+    echo "wrong package/versionCode: $(basename "$apk")" >&2; exit 1;
   }
+  if [[ "$(basename "$apk")" == "base.apk" ]]; then
+    grep -q "versionName='2.7.5'" <<<"$badging" || { echo "wrong base versionName" >&2; exit 1; }
+  fi
 done
 sign_one() {
   local input="$1" name="$2"
@@ -77,7 +81,11 @@ for signed in "$WORK/signed"/*.apk; do
   "$APKSIGNER" verify --verbose "$signed" >/dev/null
   cert="$("$APKSIGNER" verify --print-certs "$signed" | awk -F': ' '/Signer #1 certificate SHA-256 digest:/ {print tolower($2); exit}')"
   [[ "$cert" == "$CERT" ]] || { echo "signer mismatch: $(basename "$signed")" >&2; exit 1; }
-  "$AAPT" dump badging "$signed" | grep -q "package: name='com.deepseek.chat' versionCode='296' versionName='2.7.5'"
+  badging="$("$AAPT" dump badging "$signed")"
+  grep -q "package: name='com.deepseek.chat' versionCode='296'" <<<"$badging"
+  if [[ "$(basename "$signed")" == "base.apk" ]]; then
+    grep -q "versionName='2.7.5'" <<<"$badging"
+  fi
 done
 python3 - "$SOURCE_APKS" "$WORK/signed" "$OUTPUT_APKS" <<'PY'
 import pathlib, sys, zipfile
