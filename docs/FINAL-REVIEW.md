@@ -159,6 +159,21 @@ descriptor, so its result for the build 295 was trusted and written into
 | Streaming APPEND of the answer content | `Ly44;->m(Lh26; Ljava/lang/String;)V` |
 | Content holder of the answer | `Llea;` |
 
+### The patched APK of the newest build
+
+| Property | Value |
+|---|---|
+| The official app that was patched | DeepSeek 2.7.5, the version code 295 |
+| Official APK SHA-256 | `ddc52ef868b991fd33e634de834a3e2c022b0cd7ff9e854f4f141996aaeadb70` (22,210,268 bytes) |
+| The run that built the patched APK | `42364614302` of the workflow **Build the patched DeepSeek APK** |
+| Patched APK SHA-256 | `eb7f8d94c180da1888829220bba9916cc2e08a51483088c730d43d669ad1e54d` (24,147,026 bytes) |
+| The artifact | `deepseek-patched-apk` of that run, it expires on 2026-11-14 |
+| The patches that were applied | the four patches of this project, the patch result JSON of the run lists them |
+
+The checksum of the patched APK is different in every run, because the Morphe
+CLI signs every build with a new throwaway key. The checksum above belongs to
+the run that is named above.
+
 ### The patched APK is built by GitHub Actions
 
 The new workflow **Build the patched DeepSeek APK** downloads the file that
