@@ -421,7 +421,7 @@ public final class SdsAgentCoreSelfTest {
         SdsToolResult created = create.execute(context,
                 new SdsToolCall("call-1", SdsArtifactTools.CREATE,
                         "{\"title\":\"Report\",\"language\":\"markdown\",\"content\":\"# Report\"}"));
-        check(created.getStatus() == SdsToolResult.Status.OK, "the artifact must be created");
+        check(created.getStatus() == SdsToolResult.Status.SUCCESS, "the artifact must be created");
         check(created.getOutput().contains("Report"), "the result must mention the artifact");
 
         SdsToolResult refused = create.execute(context,
@@ -431,7 +431,7 @@ public final class SdsAgentCoreSelfTest {
 
         SdsTool list = registry.find(SdsArtifactTools.LIST);
         SdsToolResult listed = list.execute(context, new SdsToolCall("call-3", SdsArtifactTools.LIST, "{}"));
-        check(listed.getStatus() == SdsToolResult.Status.OK, "the artifacts must be listed");
+        check(listed.getStatus() == SdsToolResult.Status.SUCCESS, "the artifacts must be listed");
         check(listed.getOutput().contains("Report"), "the list must contain the artifact");
 
         SdsTool read = registry.find(SdsArtifactTools.READ);
