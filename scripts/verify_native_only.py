@@ -39,15 +39,20 @@ WEB_TYPES = (
     "Landroid/webkit/JavascriptInterface;",
 )
 
-# Payloads that would mean that code is injected into the app.
+# Payloads that would mean that code is injected into the app. The list holds
+# markup and calls of the web kit, not a content type of a HTTP header, because
+# the fetcher of the extension names "text/html" as a content type of a
+# response that it has to read as text.
 WEB_PAYLOADS = (
     "javascript:",
     "<script",
-    "evaluateJavascript",
-    "loadUrl(\"javascript",
-    "addJavascriptInterface",
+    "<html",
+    "<body",
+    "<!doctype html",
+    "evaluatejavascript",
+    "loadurl(\"javascript",
+    "addjavascriptinterface",
     "data:text/html",
-    "text/html",
 )
 
 # Files that would mean that the app carries a web interface.
