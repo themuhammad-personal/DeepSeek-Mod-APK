@@ -770,6 +770,7 @@ public final class SdsAgentConsoleActivity extends Activity {
                 });
             }
         }, "sds-mcp");
+        worker.setDaemon(true);
         worker.start();
     }
 
@@ -878,6 +879,7 @@ public final class SdsAgentConsoleActivity extends Activity {
                 });
             }
         }, "sds-research");
+        worker.setDaemon(true);
         worker.start();
     }
 
@@ -936,6 +938,7 @@ public final class SdsAgentConsoleActivity extends Activity {
                 });
             }
         }, "sds-studio");
+        worker.setDaemon(true);
         worker.start();
     }
 
@@ -949,7 +952,7 @@ public final class SdsAgentConsoleActivity extends Activity {
         if (workspace == null) {
             workspace = new File(getFilesDir(), "workspace");
         }
-        SdsToolContext context = new SdsToolContext(workspace, SdsExecutionPolicy.SAFE_DEFAULT,
+        SdsToolContext context = new SdsToolContext(workspace, SdsRuntimeRegistry.currentPolicy(),
                 new SdsCancellation());
         try {
             return tool.execute(context, new SdsToolCall("console-" + System.currentTimeMillis(),
@@ -1091,11 +1094,20 @@ public final class SdsAgentConsoleActivity extends Activity {
         }
     }
 
+    /** The dialog shows only the beginning of a long artifact. */
+    private static final int MAX_DIALOG_CHARS = 8000;
+
     private void onViewArtifact(SdsArtifactStore.Artifact artifact) {
+        String content = artifact.getContent();
+        boolean shortened = content.length() > MAX_DIALOG_CHARS;
+        if (shortened) {
+            content = content.substring(0, MAX_DIALOG_CHARS)
+                    + "\n\n[the rest of the artifact is not shown here, save it to see everything]";
+        }
         try {
             new android.app.AlertDialog.Builder(this)
                     .setTitle(artifact.getTitle())
-                    .setMessage(artifact.getContent())
+                    .setMessage(content)
                     .setPositiveButton(android.content.DialogInterface.BUTTON_POSITIVE, null)
                     .show();
         } catch (Throwable refused) {
@@ -1248,24 +1260,41 @@ public final class SdsAgentConsoleActivity extends Activity {
     }
 
     private void runApproved(SdsToolCall call) {
-        if (!session.onRunStarted()) return;
+        if (!session.onRunStarted()) {
+            Toast.makeText(this, "The proposal cannot be run in this state", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        final SdsToolExecutor runner = executor;
+        if (runner == null) {
+            session.onRunFailed(new SdsToolResult(
+                    SdsToolResult.Status.FAILED, "", "The tool runner is not ready."));
+            refresh();
+            return;
+        }
         refresh();
         final SdsToolCall approved = call;
         Thread worker = new Thread(() -> {
+            File workspace = SdsRuntimeRegistry.getWorkspace();
+            if (workspace == null) workspace = new File(getFilesDir(), "workspace");
             SdsToolContext context = new SdsToolContext(
-                    new File(getFilesDir(), "workspace"),
+                    workspace,
                     SdsRuntimeRegistry.currentPolicy(),
                     session.getCancellation());
-            SdsToolResult result = executor.run(approved, context, true);
-            if (result != null && result.getStatus() == SdsToolResult.Status.SUCCESS) {
+            SdsToolResult result = runner.run(approved, context, true);
+            if (result == null) {
+                result = new SdsToolResult(
+                        SdsToolResult.Status.FAILED, "", "The tool returned nothing.");
+            }
+            if (result.getStatus() == SdsToolResult.Status.SUCCESS) {
                 // The result waits for the next accumulated content of the conversation.
                 SdsToolResultHandoff.setPendingResult(result.getOutput());
             }
+            final SdsToolResult finished = result;
             runOnUiThread(() -> {
-                if (result.getStatus() == SdsToolResult.Status.SUCCESS) {
-                    session.onRunSucceeded(result);
+                if (finished.getStatus() == SdsToolResult.Status.SUCCESS) {
+                    session.onRunSucceeded(finished);
                 } else {
-                    session.onRunFailed(result);
+                    session.onRunFailed(finished);
                 }
                 refresh();
             });
