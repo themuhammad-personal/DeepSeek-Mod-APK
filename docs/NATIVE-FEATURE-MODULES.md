@@ -305,13 +305,25 @@ is pinned by its SHA-256 and the marker file only counts when the checksum
 matches. The output is bounded, the timeout is enforced and the cancellation
 flag stops the process.
 
+**The installation of the root filesystem.** The console has a button that shows
+the exact address and the checksum of the pinned archive, waits for the
+approval of the user, downloads it over https, checks the checksum against the
+official list of the release, unpacks it with the tar of the system and only
+then puts the directory in place. An interrupted download leaves no truncated
+file behind, a refused archive leaves no directory behind and the archive
+itself is removed when the checksum does not match. The address is
+`https://cdimage.ubuntu.com/ubuntu-base/releases/noble/release/ubuntu-base-24.04.5-base-arm64.tar.gz`
+and the checksum is the one of the official `SHA256SUMS` of that directory.
+
 **Rollback.** The switch in the console removes the tool from the allow-list
 and the feature disappears without touching the app.
 
 **Tests.** The missing runtime, the wrong checksum, the refused unknown
-argument and the refused run are covered. The runtime is not bundled in this
-build, so the studio reports that it is not ready and refuses to run instead
-of pretending to work.
+argument and the refused run are covered, and so are the checksum of a file,
+the refusal of an archive that is not the pinned one and the refusal of a
+download over a plain address. The runtime is not bundled in this build, so
+the studio reports that it is not ready and refuses to run instead of
+pretending to work.
 
 ---
 
@@ -331,6 +343,18 @@ hand.
 **Safety.** The network switch in the console is off by default and the
 executor refuses every tool that needs the network while it is off. Every
 call of a server tool needs its own approval and the tools are not read-only.
+Only https is used, a redirect is never followed so the token of a server
+cannot reach another host, the answer is bounded and the JSON is read with the
+strict reader.
+
+**The handshake.** The client follows the revisions of the specification that
+use a session: it sends `initialize` with the version it prefers, takes the
+version the server answers with, refuses a version it does not know, confirms
+the session with `notifications/initialized` and sends the negotiated version
+in the `MCP-Protocol-Version` header of every later call. The session the
+server hands out is sent back with every call. A server that only speaks the
+stateless revision of 2026-07-28 refuses the handshake and is reported as a
+server that could not be reached.
 The address has to use https, the answer is bounded and it is parsed with the
 strict reader, so a broken or hostile answer is refused instead of being used.
 The token of a server stays in the app-private directory and is never written
@@ -402,5 +426,6 @@ purpose, and it is written down here so that the decision is visible.
 | Device runtime proof of the observer | a real device with the official 2.7.4 and a login |
 | The tool result has to reach the chat | the official tool turn is unconfirmed in the reference analysis, so the flow is not proven |
 | The chat entry has to be checked on a device | the placement and the touch behaviour of the floating entry are not proven |
-| The PRoot runtime and the root filesystem | the binaries are not bundled and the download needs the explicit approval of the user |
-| MCP and Deep Research | a network transport that is switched off by default |
+| The PRoot runtime | the binaries of PRoot are not bundled, so the studio refuses to run even when the root filesystem is installed |
+| The root filesystem | it can be downloaded and installed now, but the first download needs about 29 MB and the explicit approval of the user |
+| MCP and Deep Research | a network transport that is switched off by default; the MCP handshake follows the revisions of the specification that use a session, so a server that only speaks the stateless revision of 2026-07-28 is refused |
