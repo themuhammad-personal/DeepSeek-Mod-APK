@@ -10,12 +10,16 @@ Checks performed on the patched APK:
 
   1. the DEX extension classes are present,
   2. the prompt serializer reads Lly1;->c into a register and calls
-     SdsAgentHooks.beforePrompt with exactly that register,
+     SdsAgentHooks.beforePrompt with exactly that register, and the result is
+     written back into that register,
   3. the streaming ResponseFragment SET method calls SdsAgentHooks.observeResponse
-     with the register that carries the replacement content into Ldea;->j,
+     with the register that carries the replacement content into Ldea;->j, and
+     the call happens after the update,
   4. the streaming ResponseFragment APPEND method calls SdsAgentHooks.observeResponse
      with the register that carries the complete accumulated content into
      Ldea;->m, and that register is the one produced by StringBuilder.toString(),
+     and the handback of a tool result runs before the update and is written
+     back into the same register,
   5. the launcher Activity attaches the native Agent Console entry at the end of
      its own onCreate,
   6. the native Agent Console Activity is declared in the manifest,
@@ -69,6 +73,27 @@ REQUIRED_EXTENSION_CLASSES = [
     EXTENSION_PACKAGE + "SdsAgentConsoleActivity;",
     EXTENSION_PACKAGE + "SdsChatEntry;",
     EXTENSION_PACKAGE + "SdsToolResultHandoff;",
+    EXTENSION_PACKAGE + "SdsAgentSession;",
+    EXTENSION_PACKAGE + "SdsToolRegistry;",
+    EXTENSION_PACKAGE + "SdsToolExecutor;",
+    EXTENSION_PACKAGE + "SdsWorkspaceTools;",
+    EXTENSION_PACKAGE + "SdsMemoryStore;",
+    EXTENSION_PACKAGE + "SdsProjectRegistry;",
+    EXTENSION_PACKAGE + "SdsArtifactStore;",
+    EXTENSION_PACKAGE + "SdsArtifactTools;",
+    EXTENSION_PACKAGE + "SdsSlashCommands;",
+    EXTENSION_PACKAGE + "SdsUiSpec;",
+    EXTENSION_PACKAGE + "SdsUiTools;",
+    EXTENSION_PACKAGE + "SdsMcpConfigStore;",
+    EXTENSION_PACKAGE + "SdsMcpClient;",
+    EXTENSION_PACKAGE + "SdsMcpTools;",
+    EXTENSION_PACKAGE + "SdsHttpFetcher;",
+    EXTENSION_PACKAGE + "SdsResearchTools;",
+    EXTENSION_PACKAGE + "SdsSandboxManager;",
+    EXTENSION_PACKAGE + "SdsSandboxTool;",
+    EXTENSION_PACKAGE + "SdsExportService;",
+    EXTENSION_PACKAGE + "SdsJson;",
+    EXTENSION_PACKAGE + "SdsJsonWriter;",
 ]
 
 # Type descriptors are collected from the disassembled output of the DEX files.
@@ -242,7 +267,10 @@ def main() -> int:
                 )
                 print(f"  FAILED  beforePrompt reads {actual}, prompt field register is {expected}")
             following = prompt_instructions[hook_index + 1] if hook_index + 1 < len(prompt_instructions) else None
-            if following is not None and following.get_name() == "move-result-object":
+            if following is None or following.get_name() != "move-result-object":
+                failures.append("the guarded prompt is not moved into a register")
+                print("  FAILED  the guarded prompt is not moved into a register")
+            else:
                 move_registers, _ = parse_instruction(following)
                 if move_registers and move_registers[0] == expected:
                     print(f"  OK      the guarded prompt is written back into {expected}")
@@ -275,6 +303,14 @@ def main() -> int:
             else:
                 failures.append(f"observeResponse reads {actual} but the SET content is in {expected}")
                 print(f"  FAILED  observeResponse reads {actual}, SET content register is {expected}")
+            if hook_index < update_index:
+                failures.append(
+                    "the observer runs before the content update, so it would not see the "
+                    "value that the app stores"
+                )
+                print("  FAILED  the observer runs before the content update")
+            else:
+                print("  OK      the observer runs after the content update")
 
     print("\n[4] streaming APPEND hook")
     append_method = find_method(dexes, "Lv44;", "m", "(Lc26;Ljava/lang/String;)V")
