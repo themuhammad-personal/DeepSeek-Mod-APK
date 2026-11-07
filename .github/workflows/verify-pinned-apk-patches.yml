@@ -182,9 +182,9 @@ jobs:
         if: steps.source.outputs.has_source == 'true'
         shell: bash
         run: |
-          set -euo pipefail
           MPP="$(find patches/build/libs -maxdepth 1 -name '*.mpp' -print -quit)"
           test -n "$MPP"
+          status=0
           java -Xms1024m -Xmx4g -jar "$RUNNER_TEMP/deepseek-verify/morphe-desktop.jar" \
             patch --patches "$MPP" --exclusive --validate --bytecode-mode FULL \
             --enable "DeepSeek 2.7.4 compatibility check" \
@@ -193,7 +193,24 @@ jobs:
             --verify-with-sdk "$ANDROID_HOME" \
             --result-file "$RUNNER_TEMP/deepseek-verify/patch-result.json" \
             --out "$RUNNER_TEMP/deepseek-verify/deepseek-patched.apk" \
-            "$RUNNER_TEMP/deepseek-verify/deepseek-pinned.apk"
+            "$RUNNER_TEMP/deepseek-verify/deepseek-pinned.apk" \
+            > "$RUNNER_TEMP/morphe-apply.log" 2>&1 || status=$?
+          cat "$RUNNER_TEMP/morphe-apply.log"
+          if [[ "$status" -ne 0 ]]; then
+            tail -40 "$RUNNER_TEMP/morphe-apply.log" | while IFS= read -r line; do
+              printf '::error title=Morphe apply failed::%s\n' "${line//$'\r'/}"
+            done
+          fi
+          exit "$status"
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check the Morphe patch result JSON
+        if: steps.source.outputs.has_source == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
           test -s "$RUNNER_TEMP/deepseek-verify/patch-result.json"
           python3 - "$RUNNER_TEMP/deepseek-verify/patch-result.json" <<'PYRESULT'
           import json, sys
