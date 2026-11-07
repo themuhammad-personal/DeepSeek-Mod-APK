@@ -1,59 +1,55 @@
-# Final build — exact owner-provided single APK
+# DeepSeek 2.7.5 / versionCode 296 — final single-APK build
 
-Final branch: `final/2.7.5-296-split-apk`  
-Source: the Google Drive file ID explicitly supplied by the owner: `1r4__RT5nFRmkfxHuK4sLWgGeNXGKbS3o`.
+## Source restriction
 
-## Input restriction
+This branch patches only the standalone APK downloaded from the exact Google Drive file ID supplied by the owner:
+`1r4__RT5nFRmkfxHuK4sLWgGeNXGKbS3o`.
 
-The build workflow downloads **only that single Drive APK**. It does not use the earlier chat-uploaded APKS archive, any alternate APK, an APKMirror package, an extracted APK from another source, or any source APK committed to the repository.
+Expected source SHA-256:
+`fd2f7c5479f8e784d22724ea45ac7a3ae91904437591ae8337125194c11a3bfa`
 
-The Drive link is converted to a direct download URL within GitHub Actions. The runner validates that the response is an APK (ZIP with AndroidManifest.xml), then checks:
-- package: `com.deepseek.chat`
-- version name: `2.7.5`
-- version code: `296`
-- no split attribute (the workflow accepts one standalone APK only).
+Package: `com.deepseek.chat`; version: `2.7.5`; versionCode: `296`.
 
-If Drive does not permit anonymous download, if the URL returns an HTML confirmation/error page, or if the linked APK is a split rather than a standalone APK, the job stops. It does not fall back to a different APK.
+No other APK/APKS/archive is used as a fallback. If the Drive file is changed, not downloadable, not a standalone APK, or does not match version 296 fingerprints, the build stops.
 
-After downloading, the build verifies the version-296 fingerprint set against this exact APK. A fingerprint mismatch stops patching, which prevents accidental application of another build's offsets or method names.
+## Why this fix branch exists
 
-## Build process
+The first device report showed outgoing user messages with retry icons, but no assistant response. The Agent Console also showed an IDLE session and zero response-observer callbacks. This means the static CI proof was not enough to establish runtime send/stream behaviour.
 
-1. Download the exact file ID supplied by the owner.
-2. Verify APK container, package, version and standalone status.
-3. Verify the build-296 fingerprints.
-4. Build the Morphe patch bundle from this repository branch.
-5. Apply the four existing native patches to that one APK.
-6. Run hook-site, login-untouched, native-only and DEX verification.
-7. Re-sign the patched APK with an owner-controlled key, or create a temporary key if secrets are absent.
-8. Upload only the patched APK and its SHA-256 checksum as the Actions artifact.
+The branch `fix/296-chat-send-fail-open` adds defensive behaviour:
+- `beforePrompt` now fails open and returns the original prompt if optional Agent processing throws.
+- response diagnostics and proposal parsing are isolated so an Agent error cannot interrupt the official response stream.
+- the Console now refreshes diagnostics live and shows request-hook calls and fail-open count alongside response observer callbacks.
 
-The original Play signing certificate cannot be kept after modifying the APK. The patched APK therefore cannot update the official Play Store installation in place.
+This reduces the risk that an experimental native Agent hook can block normal chat. It does not bypass server checks or establish why the first device build failed. A physical-device test is still required.
 
-## Persistent signing key
+## Persistent signing identity: superdeepSeek
 
-For repeatable updates, set these GitHub Actions secrets before installing the first modified build:
+The workflow now requires a persistent owner-controlled signing key and no longer generates a temporary signing key. The alias is exactly `superdeepSeek`.
+
+Before dispatching the APK workflow, add these GitHub Actions repository secrets:
 - `SDS_SIGNING_KEY_BASE64`
 - `SDS_KEYSTORE_PASSWORD`
 - `SDS_KEY_PASSWORD`
-- `SDS_KEY_ALIAS`
+- `SDS_KEY_ALIAS` = `superdeepSeek`
 
-Generate a JKS on a trusted computer:
-```bash
-keytool -genkeypair -v -keystore deepseek-mod-release.jks \
-  -storetype JKS -alias deepseek-mod \
-  -keyalg RSA -keysize 3072 -validity 10000
-base64 -w 0 deepseek-mod-release.jks > deepseek-mod-release.base64.txt
-```
+Keep the JKS and passwords in a secure backup. Never commit the keystore or secrets. Losing the key means future builds cannot update an app signed with it.
 
-Never commit the keystore or its passwords. Without these secrets the workflow uses a temporary one-run key; another build will have a different signature and cannot update the installed copy.
+Workflow: `.github/workflows/build-deepseek-296-single-apk.yml`  
+Trigger: manual `workflow_dispatch` only. The workflow downloads the pinned Drive APK, applies the four existing Morphe patches, verifies hook locations/login/native-only behaviour, signs with the persistent key, and uploads one APK artifact.
 
-## Output and installation
+## Important: previous install signature
 
-A successful run publishes artifact `deepseek-mod-2.7.5-296-apk`, containing:
-- `deepseek-mod-2.7.5-296.apk`
-- `deepseek-mod-2.7.5-296.apk.sha256`
+The already-installed APK from run `42394660963` was signed with a one-run temporary key. It cannot be updated by this new `superdeepSeek` identity. Back up anything important, uninstall that temporary-signature build, then install the first APK signed with the permanent key. Subsequent builds using the same JKS will install as updates.
 
-Install the APK normally. Back up app data before uninstalling the official Play Store version, because the signing certificate changes.
+## Runtime diagnosis
 
-Static checks do not prove device runtime behaviour. First launch, sign-in, chat streaming and Agent interactions still need physical-device testing.
+Before testing Agent proposals, keep **Allow DeepSeek to propose native tools** turned off and send a new simple message. The chat should work with Agent disabled. If it still shows the retry icon, collect Android logcat for the failed send. The console's new diagnostics distinguish:
+- request hook calls and fail-open count;
+- response observer callbacks, which only increase after an answer stream reaches the hooked methods.
+
+The Agent Console is a proposal/diagnostics screen, not a separate chat. Approve/Deny/Stop do not send a message. The proposal queue can only populate after a response contains a valid native tool proposal. Tool-result handoff remains disabled by default and has not been device-verified. Linux Studio runtime binaries are not bundled in this build.
+
+## Install constraints
+
+The official Play Store signature cannot be retained after patching. The modified APK uses the owner's `superdeepSeek` signer and cannot update the official installation in place. Back up local app data before uninstalling the official app. Login, chat streaming, and Agent behaviour must be tested on-device after installation.
