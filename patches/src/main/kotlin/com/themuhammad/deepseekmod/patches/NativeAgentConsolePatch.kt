@@ -1,5 +1,6 @@
 package com.themuhammad.deepseekmod.patches
 
+import app.morphe.patcher.extensions.InstructionExtensions.addInstructions
 import app.morphe.patcher.patch.patch
 import app.morphe.patcher.patch.resourceXml
 
@@ -16,6 +17,17 @@ val nativeAgentConsolePatch = patch(
     dependsOn(nativeAgentHooksPatch)
 
     execute {
+        // The runtime prepares itself when the chat screen starts, so the
+        // switches of the user are restored before the first prompt is sent.
+        val onCreate = MainActivityOnCreateFingerprint.method
+        val returnIndex = resolveReturnIndex(onCreate)
+        onCreate.addInstructions(
+            returnIndex,
+            """
+                invoke-static { p0 }, Lcom/themuhammad/deepseekmod/extension/SdsAppContext;->initialize(Landroid/content/Context;)V
+            """
+        )
+
         resourceXml("AndroidManifest.xml").use { manifest ->
             val application = manifest.elements("application").firstOrNull()
                 ?: error("DeepSeek AndroidManifest.xml has no application element")

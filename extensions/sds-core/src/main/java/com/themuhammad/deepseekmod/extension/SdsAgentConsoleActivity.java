@@ -85,6 +85,7 @@ public final class SdsAgentConsoleActivity extends Activity {
         proposalMode.setChecked(SdsAgentHooks.isEnabled());
         proposalMode.setOnCheckedChangeListener((button, checked) -> {
             SdsAgentHooks.setEnabled(checked);
+            SdsSettings.setAgentEnabled(checked);
             refresh();
         });
         refresh();
@@ -158,6 +159,7 @@ public final class SdsAgentConsoleActivity extends Activity {
         handoffSwitch.setChecked(SdsToolResultHandoff.isEnabled());
         handoffSwitch.setOnCheckedChangeListener((button, checked) -> {
             SdsToolResultHandoff.setEnabled(checked);
+            SdsSettings.setHandoffEnabled(checked);
         });
         addGap(root, 8);
         root.addView(handoffSwitch, matchWrap());
@@ -256,7 +258,8 @@ public final class SdsAgentConsoleActivity extends Activity {
         includeMemory.setTextSize(13);
         includeMemory.setChecked(SdsRuntimeRegistry.isIncludeMemoryInPrompt());
         includeMemory.setOnCheckedChangeListener((button, checked) ->
-                SdsRuntimeRegistry.setIncludeMemoryInPrompt(checked));
+                SdsRuntimeRegistry.setIncludeMemoryInPrompt(checked);
+            SdsSettings.setMemoryInPrompt(checked));
         LinearLayout.LayoutParams includeMemoryParams = matchWrap();
         includeMemoryParams.topMargin = dp(6);
         memoryCard.addView(includeMemory, includeMemoryParams);
@@ -325,6 +328,7 @@ public final class SdsAgentConsoleActivity extends Activity {
         networkSwitch.setChecked(SdsRuntimeRegistry.isNetworkAllowed());
         networkSwitch.setOnCheckedChangeListener((button, checked) -> {
             SdsRuntimeRegistry.setNetworkAllowed(checked);
+            SdsSettings.setNetworkAllowed(checked);
             rebuildExecutor();
             refreshTools();
         });
@@ -426,6 +430,7 @@ public final class SdsAgentConsoleActivity extends Activity {
         sandboxSwitch.setChecked(SdsRuntimeRegistry.isSandboxEnabled());
         sandboxSwitch.setOnCheckedChangeListener((button, checked) -> {
             SdsRuntimeRegistry.setSandboxEnabled(checked);
+            SdsSettings.setSandboxEnabled(checked);
             registry = buildToolRegistry();
             refreshTools();
         });

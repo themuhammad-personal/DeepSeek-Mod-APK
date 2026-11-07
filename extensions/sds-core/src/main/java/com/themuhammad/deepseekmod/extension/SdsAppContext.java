@@ -50,6 +50,14 @@ public final class SdsAppContext {
             SdsRuntimeRegistry.setSandboxManager(new SdsSandboxManager(nativeLibraryDirectory, files));
             SdsRuntimeRegistry.setMcpConfigStore(new SdsMcpConfigStore(new File(files, MCP_FILE)));
             SdsRuntimeRegistry.ensureDefaults();
+
+            // The switches of the user survive a restart of the app.
+            SdsSettings.attach(target);
+            SdsRuntimeRegistry.setNetworkAllowed(SdsSettings.isNetworkAllowed());
+            SdsRuntimeRegistry.setIncludeMemoryInPrompt(SdsSettings.isMemoryInPrompt());
+            SdsRuntimeRegistry.setSandboxEnabled(SdsSettings.isSandboxEnabled());
+            SdsToolResultHandoff.setEnabled(SdsSettings.isHandoffEnabled());
+            SdsAgentHooks.setEnabled(SdsSettings.isAgentEnabled());
         } catch (Throwable ignored) {
             // A feature that cannot prepare itself stays inactive.
         }

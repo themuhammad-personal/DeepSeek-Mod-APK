@@ -379,8 +379,11 @@ styles are removed, are covered.
 
 **Advanced settings** are implemented as the switches of the console: the tool
 proposal mode, the network switch, the switch that adds the memories to every
-prompt and the switch of the Linux Studio. Each of them changes one thing and
-each of them is off by default.
+prompt, the switch of the Linux Studio and the switch that returns the result of
+a tool to the chat. Each of them changes one thing and each of them is off by
+default. The value of every switch is stored in the app-private preferences of
+the app, so the user does not have to turn them on again after a restart. The
+runtime restores them when the chat screen starts.
 
 **The advertisement bar of the reference product is deliberately not ported.**
 It is a foreign advertisement surface inside the chat of the official app: it

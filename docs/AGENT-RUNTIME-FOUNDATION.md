@@ -133,7 +133,7 @@ See docs/DEEPSEEK-STREAM-TRACE.md for the obfuscated classes, methods and eviden
 ## Rollback and disable behaviour
 
 - The two experimental patches stay `default = false`, so a build without them is the untouched official app behaviour.
-- Proposal mode is off by default and session-only, so the hooks never change a prompt until the user turns it on.
+- Proposal mode is off by default, so the hooks never change a prompt until the user turns it on. The switches of the user are stored in the app-private preferences, so they survive a restart of the app; the proposal queue itself stays in the memory of the process.
 - The allow-list is built by the console from the registered tools only. The workspace, the artifact and the Generative UI tools are always there, the sandbox command only while its switch is on, and the tools of an MCP server only while that server is on, so removing the population removes every executable tool without touching the UI.
 - The registry refuses a duplicate name, so a tool cannot be replaced at runtime.
 - The chat entry is a separate patch, so the console can be reached from the
@@ -158,7 +158,7 @@ The CI run of the runtime is recorded in the build workflow; the results are bui
 
 ## Explicitly not implemented
 
-The stream path is statically traced but not yet runtime-verified on a physical device. Callback frequency, coroutine/thread context, lifecycle ordering and interaction with Compose rendering are still unknown. The console entry in the chat screen is proved statically only, its placement and its touch behaviour on a device are unproven. The current branch does not invoke MCP tools, does not run a research without the network switch and an approval, does not send tool results back to DeepSeek, does not expose a stop control for the official chat itself, and does not bundle the PRoot runtime of the Linux Studio. The proposal queue is in-memory and Agent mode is session-only.
+The stream path is statically traced but not yet runtime-verified on a physical device. Callback frequency, coroutine/thread context, lifecycle ordering and interaction with Compose rendering are still unknown. The console entry in the chat screen is proved statically only, its placement and its touch behaviour on a device are unproven. The current branch does not invoke MCP tools, does not run a research without the network switch and an approval, does not send tool results back to DeepSeek, does not expose a stop control for the official chat itself, and does not bundle the PRoot runtime of the Linux Studio. The proposal queue is in-memory and the switches of the console are stored in the app-private preferences, which are not checked on a device yet.
 
 Therefore, this is a native agent runtime with an approval-gated executor for the private workspace, not a complete multi-turn agent.
 

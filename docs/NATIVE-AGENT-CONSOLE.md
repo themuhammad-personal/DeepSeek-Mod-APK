@@ -212,7 +212,7 @@ before any code of the tool is reached.
 - The tool result can be returned to the chat, but the flow is only proved
   statically. The switch is off by default and the device run has to prove
   that the chat renders the rewritten content and that nothing else changes.
-- The proposal queue is in-memory and the proposal mode is session-only.
+- The proposal queue is in-memory. The switches of the console are stored in the app-private preferences of the app, so they survive a restart; this storage is not checked on a device yet.
 - The PRoot runtime is not bundled in this build, so the Linux Studio refuses
   to run and says so.
 - The chat entry is proven statically only. Its placement and its touch
