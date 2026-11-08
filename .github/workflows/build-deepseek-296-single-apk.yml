@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - "final/2.7.5-296-split-apk"
+      - "super-deepseek/296"
     paths:
       - ".github/workflows/build-deepseek-296-single-apk.yml"
       - "patches/**"
@@ -28,7 +29,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 75
     steps:
-      - name: Check out the final branch
+      - name: Check out the branch
         uses: actions/checkout@v4
 
       - name: Set up Java 21
