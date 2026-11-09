@@ -121,6 +121,26 @@ jobs:
           fi
           echo "Verified the exact Drive download as one standalone DeepSeek 2.7.5 / 296 APK."
 
+      - name: Inspect launcher, theme and splash resources (diagnostic only)
+        shell: bash
+        run: |
+          set -uo pipefail
+          APK="$RUNNER_TEMP/deepseek-296/official-from-owner-drive.apk"
+          BT="$ANDROID_HOME/build-tools/36.0.0"
+          {
+            echo "## Source APK inspection (diagnostic)"
+            echo
+            echo '```'
+            "$BT/aapt" dump badging "$APK" | grep -E "^(application:|launchable-activity|application-label)" || true
+            echo "--- manifest: application/activity attributes"
+            "$BT/aapt" dump xmltree "$APK" AndroidManifest.xml | grep -E "android:(label|icon|roundIcon|theme|name)\(" | head -60 || true
+            echo "--- resources mentioning splash/launcher/app_name"
+            "$BT/aapt" dump resources "$APK" | grep -iE "splash|ic_launcher|app_name|Theme\." | head -60 || true
+            echo "--- signing certificate"
+            "$BT/apksigner" verify --print-certs "$APK" 2>&1 | head -8 || true
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
       - name: Run approval-first native regression tests
         shell: bash
         run: bash scripts/test-agent-core.sh
@@ -155,7 +175,7 @@ jobs:
             --output "$RUNNER_TEMP/deepseek-296/morphe-desktop.jar"
           echo "3a2efefd567b44dde15971a58d5aa649a32aba30781d3400dc08d688c720168f $RUNNER_TEMP/deepseek-296/morphe-desktop.jar" | sha256sum --check
 
-      - name: Apply the four native patches to the exact Drive APK
+      - name: Apply the Super DeepSeek patches to the exact Drive APK
         shell: bash
         env:
           GITHUB_ACTOR: ${{ github.actor }}
@@ -166,8 +186,8 @@ jobs:
             patch --patches "$MPP" --exclusive --validate --bytecode-mode FULL \
             --enable "DeepSeek 2.7.4 compatibility check" \
             --enable "Native Agent hook points (experimental)" \
-            --enable "Super DeepSeek native Agent Console" \
-            --enable "Super DeepSeek native Agent chat entry" \
+            --enable "Super DeepSeek runtime init" \
+            --enable "Super DeepSeek branding" \
             --result-file "$RUNNER_TEMP/deepseek-296/patch-result.json" \
             --out "$RUNNER_TEMP/deepseek-296/patched-morphe.apk" \
             "$RUNNER_TEMP/deepseek-296/official-from-owner-drive.apk" \
@@ -182,8 +202,8 @@ jobs:
           expected={
             "DeepSeek 2.7.4 compatibility check",
             "Native Agent hook points (experimental)",
-            "Super DeepSeek native Agent Console",
-            "Super DeepSeek native Agent chat entry",
+            "Super DeepSeek runtime init",
+            "Super DeepSeek branding",
           }
           applied=set(data.get("appliedPatches") or [])
           failed=data.get("failedPatches") or []
@@ -208,6 +228,16 @@ jobs:
           for dex in "$RUNNER_TEMP/deepseek-296/dex"/*.dex; do
             "$ANDROID_HOME/build-tools/36.0.0/dexdump" -f "$dex" >/dev/null
           done
+
+      - name: Verify the branding landed in the patched APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          PATCHED="$RUNNER_TEMP/deepseek-296/patched-morphe.apk"
+          AAPT="$ANDROID_HOME/build-tools/36.0.0/aapt"
+          "$AAPT" dump badging "$PATCHED" | grep -E "^application-label:" | tee "$RUNNER_TEMP/deepseek-296/label.txt"
+          grep -F "Super DeepSeek" "$RUNNER_TEMP/deepseek-296/label.txt"
+          unzip -l "$PATCHED" | grep -E "res/.*(sds_icon|ic_launcher)" | head -20 || true
 
       - name: Prepare the signing key
         shell: bash
@@ -286,13 +316,13 @@ jobs:
           )
           SOURCE_SHA="$(awk '{print $1}' "$RUNNER_TEMP/deepseek-296/source.sha256")"
           {
-            echo "## DeepSeek 2.7.5 / versionCode 296 — single APK"
+            echo "## Super DeepSeek 2.7.5 / versionCode 296 — single APK (P1: branding)"
             echo
             PATCHED_SHA="$(sha256sum "$RUNNER_TEMP/deepseek-296/deepseek-mod-2.7.5-296.apk" | awk '{print $1}')"
             echo "- Source: exact Google Drive file ID 1r4__RT5nFRmkfxHuK4sLWgGeNXGKbS3o supplied by the owner."
             echo "- Source APK SHA-256: $SOURCE_SHA"
             echo "- Patched APK SHA-256: $PATCHED_SHA"
-            echo "- All four Morphe patches applied and static verification passed."
+            echo "- Patches applied: compatibility check, hook points, runtime init, branding. Agent Console and chat entry are removed."
             echo "- Persistent signing key: $SDS_PERSISTENT_KEY"
             if [[ "$SDS_PERSISTENT_KEY" != "true" ]]; then
               echo
